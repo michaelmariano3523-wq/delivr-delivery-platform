@@ -1,0 +1,7 @@
+{
+  "name": "DelivR - Delivery Platform",
+  "description": "A comprehensive delivery application featuring real-time tracking, admin approval workflows, and multi-role management for restaurants and drivers.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

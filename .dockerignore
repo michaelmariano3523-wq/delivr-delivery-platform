@@ -1,0 +1,8 @@
+node_modules
+dist
+delivery.db
+.env.local
+.env
+*.log
+.git
+.gitignore
