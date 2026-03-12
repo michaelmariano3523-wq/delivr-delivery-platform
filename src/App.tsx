@@ -19,11 +19,130 @@ import {
   Wallet,
   TrendingUp,
   Trash2,
-  ShoppingBag
+  ShoppingBag,
+  Bike,
+  Download,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function DeliveryMap({ driverLoc, restaurantLoc, clientLoc }: any) {
+  const scale = 50000; // zoom level adjusted
+  const centerX = 150;
+  const centerY = 150;
+
+  const getPos = (loc: any) => {
+    if (!loc || !restaurantLoc) return { x: centerX, y: centerY };
+    return {
+      x: centerX + (loc.lng - restaurantLoc.lng) * scale,
+      y: centerY - (loc.lat - restaurantLoc.lat) * scale
+    };
+  };
+
+  const drv = getPos(driverLoc);
+  const cli = getPos(clientLoc);
+  const res = { x: centerX, y: centerY };
+
+  // Calculate distances
+  const distToCli = driverLoc && clientLoc ? calculateDistance(driverLoc.lat, driverLoc.lng, clientLoc.lat, clientLoc.lng) : 0;
+  const distToRes = driverLoc && restaurantLoc ? calculateDistance(driverLoc.lat, driverLoc.lng, restaurantLoc.lat, restaurantLoc.lng) : 0;
+
+  return (
+    <div className="relative h-[300px] w-full bg-slate-100 rounded-3xl overflow-hidden border-4 border-white shadow-2xl">
+      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+      
+      <svg className="absolute inset-0 h-full w-full">
+        <motion.path 
+          d={`M ${res.x} ${res.y} L ${cli.x} ${cli.y}`}
+          stroke="black" strokeWidth="2" strokeDasharray="4 4" opacity="0.1" fill="none"
+        />
+      </svg>
+
+      {/* Restaurant */}
+      <div className="absolute" style={{ left: res.x, top: res.y, transform: 'translate(-50%, -50%)' }}>
+        <div className="bg-black text-white p-2 rounded-xl shadow-lg ring-4 ring-white">
+          <Store size={14} />
+        </div>
+      </div>
+
+      {/* Client */}
+      <div className="absolute" style={{ left: cli.x, top: cli.y, transform: 'translate(-50%, -50%)' }}>
+        <div className="bg-emerald-500 text-white p-2 rounded-xl shadow-lg ring-4 ring-white">
+          <User size={14} />
+        </div>
+      </div>
+
+      {/* Driver (Motinha) */}
+      <motion.div 
+        animate={{ left: drv.x, top: drv.y }}
+        transition={{ type: 'spring', stiffness: 40, damping: 15 }}
+        className="absolute z-10" 
+        style={{ transform: 'translate(-50%, -50%)' }}
+      >
+        <div className="bg-amber-400 text-black p-3 rounded-full shadow-2xl ring-4 ring-white">
+          <Bike size={20} className="animate-pulse" />
+        </div>
+        <div className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full shadow-lg mt-2 border border-black/5 flex items-center gap-2">
+           <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+           <p className="text-[10px] font-black whitespace-nowrap">VOCÊ • {distToCli < 0.1 ? "CHEGANDO" : `${distToCli.toFixed(1)}km`}</p>
+        </div>
+      </motion.div>
+
+      <div className="absolute bottom-4 left-4 right-4 flex gap-3">
+         <Card className="flex-1 bg-white/60 backdrop-blur-md p-3 border-none flex items-center justify-between">
+            <div>
+               <p className="text-[8px] font-black text-black/40 uppercase">Para Loja</p>
+               <p className="text-xs font-black">{distToRes.toFixed(2)} km</p>
+            </div>
+            <Store size={12} className="text-black/20" />
+         </Card>
+         <Card className="flex-1 bg-white/60 backdrop-blur-md p-3 border-none flex items-center justify-between">
+            <div>
+               <p className="text-[8px] font-black text-black/40 uppercase">Para Cliente</p>
+               <p className="text-xs font-black">{distToCli.toFixed(2)} km</p>
+            </div>
+            <User size={12} className="text-emerald-500/40" />
+         </Card>
+      </div>
+    </div>
+  );
+}
+
+function APKDownload() {
+  return (
+    <div className="fixed bottom-6 right-6 z-[100] group">
+      <div className="absolute -inset-2 bg-emerald-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+      <a 
+        href="https://delivr.app/download" 
+        target="_blank"
+        rel="noreferrer"
+        className="relative flex items-center gap-3 bg-black text-white px-6 py-4 rounded-3xl shadow-2xl hover:scale-110 active:scale-95 transition-all"
+      >
+        <div className="bg-emerald-500 p-2 rounded-xl">
+          <Download size={20} />
+        </div>
+        <div className="text-left">
+          <p className="text-[10px] font-black uppercase opacity-50">Mobile App</p>
+          <p className="text-sm font-black">Baixar APK</p>
+        </div>
+      </a>
+    </div>
+  );
+}
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -175,6 +294,7 @@ export default function App() {
         {user?.role === 'driver' && <DriverDashboard user={user} />}
         {user?.role === 'client' && <ClientDashboard user={user} />}
       </main>
+      <APKDownload />
     </div>
   );
 }
@@ -714,29 +834,59 @@ function AddMenuItemForm({ restaurantId, onAdded }: { restaurantId: number, onAd
   const [desc, setDesc] = useState('');
   const [price, setPrice] = useState('');
   const [image, setImage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch(`/api/restaurants/${restaurantId}/menu`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description: desc, price: parseFloat(price), image })
-    });
-    setName(''); setDesc(''); setPrice(''); setImage('');
-    onAdded();
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/restaurants/${restaurantId}/menu`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: desc, price: parseFloat(price), image })
+      });
+      if (res.ok) {
+        setName(''); setDesc(''); setPrice(''); setImage('');
+        onAdded();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Erro ao adicionar item');
+      }
+    } catch (err) {
+      setError('Erro de conexão');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Card className="max-w-xl">
-      <h3 className="mb-4 font-bold">Adicionar Item ao Cardápio</h3>
+    <Card className="max-w-xl border-none bg-black/5">
+      <h3 className="mb-4 text-xl font-black tracking-tight">Adicionar ao Cardápio</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <input placeholder="Nome do prato" value={name} onChange={e => setName(e.target.value)} className="w-full rounded-xl border border-black/10 px-4 py-2" required />
-        <textarea placeholder="Descrição" value={desc} onChange={e => setDesc(e.target.value)} className="w-full rounded-xl border border-black/10 px-4 py-2" required />
-        <div className="flex gap-4">
-          <input type="number" step="0.01" placeholder="Preço" value={price} onChange={e => setPrice(e.target.value)} className="w-full rounded-xl border border-black/10 px-4 py-2" required />
-          <input placeholder="URL da Imagem" value={image} onChange={e => setImage(e.target.value)} className="w-full rounded-xl border border-black/10 px-4 py-2" required />
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-black/30 ml-2">Nome do prato</label>
+          <input placeholder="Ex: Burger Gourmet" value={name} onChange={e => setName(e.target.value)} className="w-full rounded-2xl border-none bg-white p-4 text-sm shadow-sm focus:ring-2 focus:ring-black" required />
         </div>
-        <Button type="submit" className="w-full">Adicionar</Button>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-black/30 ml-2">Descrição</label>
+          <textarea placeholder="Ingredientes e detalhes..." value={desc} onChange={e => setDesc(e.target.value)} className="w-full rounded-2xl border-none bg-white p-4 text-sm shadow-sm focus:ring-2 focus:ring-black min-h-[100px]" required />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-black/30 ml-2">Preço (R$)</label>
+            <input type="number" step="0.01" placeholder="0.00" value={price} onChange={e => setPrice(e.target.value)} className="w-full rounded-2xl border-none bg-white p-4 text-sm shadow-sm focus:ring-2 focus:ring-black" required />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-black/30 ml-2">URL da Imagem</label>
+            <input placeholder="https://..." value={image} onChange={e => setImage(e.target.value)} className="w-full rounded-2xl border-none bg-white p-4 text-sm shadow-sm focus:ring-2 focus:ring-black" required />
+          </div>
+        </div>
+        {error && <p className="text-xs font-bold text-red-500 flex items-center gap-1"><AlertCircle size={14} /> {error}</p>}
+        <Button type="submit" disabled={loading} className="h-14 w-full bg-black text-white hover:scale-[1.02] active:scale-95 transition-all font-black uppercase tracking-widest">
+          {loading ? "Adicionando..." : "Cadastrar Produto"}
+        </Button>
       </form>
     </Card>
   );
@@ -748,6 +898,7 @@ function DriverDashboard({ user }: { user: UserData }) {
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [isOnline, setIsOnline] = useState(false);
+  const [driverLoc, setDriverLoc] = useState<{lat: number, lng: number} | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'orders' | 'stats'>('orders');
@@ -783,13 +934,14 @@ function DriverDashboard({ user }: { user: UserData }) {
       let watchId: number;
       if (navigator.geolocation) {
         watchId = navigator.geolocation.watchPosition((pos) => {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setDriverLoc(loc);
           if (socketRef.current?.readyState === WebSocket.OPEN) {
             socketRef.current.send(JSON.stringify({
               type: 'update_location',
               driverId: user.id,
               orderId: activeOrder?.id,
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude
+              ...loc
             }));
           }
         });
@@ -920,15 +1072,23 @@ function DriverDashboard({ user }: { user: UserData }) {
                 <div className="relative mb-4">
                   <div className="absolute -left-[1.35rem] top-1 w-2.5 h-2.5 rounded-full bg-black ring-4 ring-white" />
                   <p className="text-xs text-black/40 uppercase font-bold tracking-tight">Retirada</p>
-                  <p className="font-medium">{activeOrder.restaurantName}</p>
-                  <p className="text-sm text-black/50">{activeOrder.restaurantAddress}</p>
+                  <p className="font-medium text-sm">{activeOrder.restaurantName}</p>
+                  <p className="text-[10px] text-black/50">{activeOrder.restaurantAddress}</p>
                 </div>
                 <div className="relative">
                   <div className="absolute -left-[1.35rem] top-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-white" />
                   <p className="text-xs text-emerald-500/60 uppercase font-bold tracking-tight">Entrega</p>
-                  <p className="font-medium">{activeOrder.address}</p>
+                  <p className="font-medium text-sm">{activeOrder.address}</p>
                 </div>
               </div>
+            </div>
+            
+            <div className="md:col-span-2 mt-4 overflow-hidden rounded-3xl border border-black/5">
+               <DeliveryMap 
+                 driverLoc={driverLoc} 
+                 restaurantLoc={{ lat: activeOrder.restaurantLat, lng: activeOrder.restaurantLng }}
+                 clientLoc={{ lat: activeOrder.client_lat, lng: activeOrder.client_lng }}
+               />
             </div>
           </div>
           <div className="mt-8 flex gap-3">

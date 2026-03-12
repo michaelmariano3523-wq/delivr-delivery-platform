@@ -29,6 +29,8 @@ db.exec(`
     name TEXT,
     address TEXT,
     category TEXT,
+    lat REAL,
+    lng REAL,
     FOREIGN KEY(userId) REFERENCES users(id)
   );
 
@@ -73,7 +75,8 @@ db.exec(`
 const migrate = () => {
   const tables = {
     users: { id_document: 'TEXT', selfie: 'TEXT' },
-    orders: { client_lat: 'REAL', client_lng: 'REAL', address: 'TEXT', payment_id: 'TEXT', payment_status: 'TEXT' }
+    orders: { client_lat: 'REAL', client_lng: 'REAL', address: 'TEXT', payment_id: 'TEXT', payment_status: 'TEXT' },
+    restaurants: { lat: 'REAL', lng: 'REAL' }
   };
 
   for (const [table, columns] of Object.entries(tables)) {
@@ -232,9 +235,9 @@ async function startServer() {
     });
 
     app.post('/api/restaurants', (req, res) => {
-      const { userId, name, address, category } = req.body;
-      const result = db.prepare('INSERT INTO restaurants (userId, name, address, category) VALUES (?, ?, ?, ?)')
-        .run(userId, name, address, category);
+      const { userId, name, address, category, lat, lng } = req.body;
+      const result = db.prepare('INSERT INTO restaurants (userId, name, address, category, lat, lng) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(userId, name, address, category, lat || 0, lng || 0);
       res.json({ id: result.lastInsertRowid });
     });
 
@@ -298,12 +301,14 @@ async function startServer() {
     // Get driver's current active order (for restoring state after refresh)
     app.get('/api/orders/driver/:driverId/active', (req, res) => {
       const order = db.prepare(`
-        SELECT o.*, r.name as restaurantName, r.address as restaurantAddress
+        SELECT o.*, 
+               r.name as restaurantName, r.address as restaurantAddress, r.lat as restaurantLat, r.lng as restaurantLng,
+               u.name as clientName
         FROM orders o
         JOIN restaurants r ON o.restaurantId = r.id
+        JOIN users u ON o.clientId = u.id
         WHERE o.driverId = ? AND o.status = 'out_for_delivery'
-        LIMIT 1
-      `).get(req.params.driverId) as any;
+      `).get(req.params.driverId);
       res.json(order || null);
     });
 
