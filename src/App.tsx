@@ -675,25 +675,33 @@ function RestaurantDashboard({ user }: { user: UserData }) {
   const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'finance'>('orders');
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [stats, setStats] = useState<any>(null);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
-    const resRest = await fetch('/api/restaurants');
-    const rests = await resRest.json();
-    const myRest = rests.find((r: any) => r.userId === user.id);
-    if (myRest) {
-      setRestaurant(myRest);
-      const [resOrders, resMenu, resStats] = await Promise.all([
-        fetch(`/api/orders/restaurant/${user.id}`),
-        fetch(`/api/restaurants/${myRest.id}/menu`),
-        fetch(`/api/stats/restaurant/${user.id}`)
-      ]);
-      setOrders(await resOrders.json());
-      setMenu(await resMenu.json());
-      setStats(await resStats.json());
+    setFetching(true);
+    try {
+      const resRest = await fetch('/api/restaurants');
+      const rests = await resRest.json();
+      const myRest = rests.find((r: any) => r.userId === user.id);
+      if (myRest) {
+        setRestaurant(myRest);
+        const [resOrders, resMenu, resStats] = await Promise.all([
+          fetch(`/api/orders/restaurant/${user.id}`),
+          fetch(`/api/restaurants/${myRest.id}/menu`),
+          fetch(`/api/stats/restaurant/${user.id}`)
+        ]);
+        setOrders(await resOrders.json());
+        setMenu(await resMenu.json());
+        setStats(await resStats.json());
+      }
+    } catch (e) {
+      console.error('Failed to fetch restaurant data:', e);
+    } finally {
+      setFetching(false);
     }
   };
 
@@ -720,7 +728,11 @@ function RestaurantDashboard({ user }: { user: UserData }) {
         </Button>
       </div>
 
-      {activeTab === 'orders' && (
+      {!fetching && !restaurant && (
+        <RestaurantSetupForm userId={user.id} onComplete={fetchData} />
+      )}
+
+      {!fetching && restaurant && activeTab === 'orders' && (
         <div className="grid gap-4">
           {orders.map(order => (
             <Card key={order.id} className="flex items-center justify-between">
@@ -749,7 +761,7 @@ function RestaurantDashboard({ user }: { user: UserData }) {
         </div>
       )}
 
-      {activeTab === 'finance' && stats && (
+      {!fetching && restaurant && activeTab === 'finance' && stats && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="bg-black text-white p-6">
@@ -808,7 +820,7 @@ function RestaurantDashboard({ user }: { user: UserData }) {
         </div>
       )}
 
-      {activeTab === 'menu' && restaurant && (
+      {!fetching && restaurant && activeTab === 'menu' && (
         <div className="space-y-8">
           <AddMenuItemForm restaurantId={restaurant.id} onAdded={fetchData} />
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -826,6 +838,61 @@ function RestaurantDashboard({ user }: { user: UserData }) {
         </div>
       )}
     </div>
+  );
+}
+
+function RestaurantSetupForm({ userId, onComplete }: { userId: number, onComplete: () => void }) {
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [category, setCategory] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch('/api/restaurants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, name, address, category })
+      });
+      if (res.ok) {
+        onComplete();
+      }
+    } catch (err) {
+      console.error('Failed to setup restaurant:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="max-w-xl mx-auto border-emerald-500 bg-emerald-50/10">
+      <div className="mb-6 text-center">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg">
+          <Store size={32} />
+        </div>
+        <h3 className="text-2xl font-black tracking-tight">Configure seu Restaurante</h3>
+        <p className="text-sm text-black/50">Você precisa criar um perfil antes de gerenciar o cardápio.</p>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-black/30 ml-2">Nome do Estabelecimento</label>
+          <input placeholder="Ex: Central Burger" value={name} onChange={e => setName(e.target.value)} className="w-full rounded-2xl border-none bg-white p-4 text-sm shadow-sm focus:ring-2 focus:ring-emerald-500" required />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-black/30 ml-2">Endereço Completo</label>
+          <input placeholder="Rua, Número, Bairro" value={address} onChange={e => setAddress(e.target.value)} className="w-full rounded-2xl border-none bg-white p-4 text-sm shadow-sm focus:ring-2 focus:ring-emerald-500" required />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-black/30 ml-2">Categoria</label>
+          <input placeholder="Ex: 🍔 Burger, 🍕 Pizza" value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-2xl border-none bg-white p-4 text-sm shadow-sm focus:ring-2 focus:ring-emerald-500" required />
+        </div>
+        <Button type="submit" disabled={loading} className="h-14 w-full bg-emerald-600 text-white hover:bg-emerald-500 font-black uppercase tracking-widest transition-all">
+          {loading ? "Criando Perfil..." : "Começar Agora"}
+        </Button>
+      </form>
+    </Card>
   );
 }
 
