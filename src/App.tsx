@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  ShoppingBag, 
   User, 
   Settings, 
   Truck, 
@@ -16,7 +15,11 @@ import {
   DollarSign, 
   BarChart3, 
   Users, 
-  ClipboardList 
+  ClipboardList,
+  Wallet,
+  TrendingUp,
+  Trash2,
+  ShoppingBag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -549,8 +552,9 @@ function AdminRegisterForm() {
 function RestaurantDashboard({ user }: { user: UserData }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'finance'>('orders');
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
     fetchData();
@@ -562,10 +566,14 @@ function RestaurantDashboard({ user }: { user: UserData }) {
     const myRest = rests.find((r: any) => r.userId === user.id);
     if (myRest) {
       setRestaurant(myRest);
-      const resOrders = await fetch(`/api/orders/restaurant/${user.id}`);
+      const [resOrders, resMenu, resStats] = await Promise.all([
+        fetch(`/api/orders/restaurant/${user.id}`),
+        fetch(`/api/restaurants/${myRest.id}/menu`),
+        fetch(`/api/stats/restaurant/${user.id}`)
+      ]);
       setOrders(await resOrders.json());
-      const resMenu = await fetch(`/api/restaurants/${myRest.id}/menu`);
       setMenu(await resMenu.json());
+      setStats(await resStats.json());
     }
   };
 
@@ -580,12 +588,15 @@ function RestaurantDashboard({ user }: { user: UserData }) {
 
   return (
     <div className="space-y-8">
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-4">
         <Button onClick={() => setActiveTab('orders')} className={cn(activeTab !== 'orders' && "bg-transparent text-black hover:bg-black/5")}>
           <ClipboardList size={18} className="mr-2" /> Pedidos
         </Button>
         <Button onClick={() => setActiveTab('menu')} className={cn(activeTab !== 'menu' && "bg-transparent text-black hover:bg-black/5")}>
           <Plus size={18} className="mr-2" /> Cardápio
+        </Button>
+        <Button onClick={() => setActiveTab('finance')} className={cn(activeTab !== 'finance' && "bg-transparent text-black hover:bg-black/5")}>
+          <Wallet size={18} className="mr-2" /> Finanças
         </Button>
       </div>
 
@@ -615,6 +626,65 @@ function RestaurantDashboard({ user }: { user: UserData }) {
             </Card>
           ))}
           {orders.length === 0 && <p className="py-8 text-center text-black/50">Nenhum pedido recebido.</p>}
+        </div>
+      )}
+
+      {activeTab === 'finance' && stats && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="bg-black text-white p-6">
+              <p className="text-sm text-white/60 mb-1">Ganhos Brutos</p>
+              <p className="text-3xl font-bold">R$ {stats.gross.toFixed(2)}</p>
+              <div className="mt-4 flex items-center text-xs text-white/40">
+                <TrendingUp size={14} className="mr-1" /> Total vendido na plataforma
+              </div>
+            </Card>
+            <Card className="bg-emerald-600 text-white p-6">
+              <p className="text-sm text-white/60 mb-1">Ganhos Líquidos (a receber)</p>
+              <p className="text-3xl font-bold">R$ {stats.net.toFixed(2)}</p>
+              <div className="mt-4 flex items-center text-xs text-white/40">
+                <Wallet size={14} className="mr-1" /> Descontado 13% de taxa Delivr
+              </div>
+            </Card>
+            <Card className="p-6">
+              <p className="text-sm text-black/50 mb-1">Pedidos Concluídos</p>
+              <p className="text-3xl font-bold">{stats.count}</p>
+              <div className="mt-4 flex items-center text-xs text-black/30">
+                <Users size={14} className="mr-1" /> Volume de vendas total
+              </div>
+            </Card>
+          </div>
+
+          <Card>
+            <h3 className="mb-6 font-bold flex items-center gap-2">
+              <TrendingUp size={18} /> Performance Diária (Últimos 7 dias)
+            </h3>
+            <div className="space-y-4">
+              {stats.daily.length > 0 ? stats.daily.map((d: any, i: number) => (
+                <div key={i} className="space-y-1">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span>{d.day}</span>
+                    <span className="font-mono">R$ {d.gross.toFixed(2)}</span>
+                  </div>
+                  <div className="h-2 w-full bg-black/5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-black rounded-full" 
+                      style={{ width: `${Math.min(100, (d.gross / (stats.gross || 1)) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )) : (
+                <p className="text-center py-4 text-black/30">Dados insuficientes para gerar gráfico.</p>
+              )}
+            </div>
+          </Card>
+
+          <Card className="h-64 flex items-center justify-center border-dashed">
+            <div className="text-center">
+              <MapPin size={32} className="mx-auto mb-2 text-black/20" />
+              <p className="text-sm text-black/50">Mapa de Calor e Logística em breve</p>
+            </div>
+          </Card>
         </div>
       )}
 
@@ -679,20 +749,26 @@ function DriverDashboard({ user }: { user: UserData }) {
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [stats, setStats] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'orders' | 'stats'>('orders');
   const socketRef = useRef<WebSocket | null>(null);
 
   // Restore active order and online status after page refresh
   useEffect(() => {
     const restoreActiveOrder = async () => {
       try {
-        const res = await fetch(`/api/orders/driver/${user.id}/active`);
-        const order = await res.json();
-        if (order) {
+        const [resOrder, resStats] = await Promise.all([
+          fetch(`/api/orders/driver/${user.id}/active`),
+          fetch(`/api/stats/driver/${user.id}`)
+        ]);
+        const order = await resOrder.json();
+        if (order && order.id) {
           setActiveOrder(order);
           setIsOnline(true);
         }
+        setStats(await resStats.json());
       } catch (e) {
-        console.error('Failed to restore active order:', e);
+        console.error('Failed to restore driver state:', e);
       }
     };
     restoreActiveOrder();
@@ -756,6 +832,9 @@ function DriverDashboard({ user }: { user: UserData }) {
   const fetchAvailable = async () => {
     const res = await fetch('/api/orders/driver/available');
     setAvailableOrders(await res.json());
+    // Refresh stats too
+    const resStats = await fetch(`/api/stats/driver/${user.id}`);
+    setStats(await resStats.json());
   };
 
   const acceptOrder = async (orderId: number) => {
@@ -781,6 +860,17 @@ function DriverDashboard({ user }: { user: UserData }) {
 
   return (
     <div className="space-y-8">
+      {isOnline && (
+        <div className="flex gap-4">
+          <Button onClick={() => setActiveTab('orders')} className={cn(activeTab !== 'orders' && "bg-transparent text-black hover:bg-black/5")}>
+            <MapPin size={18} className="mr-2" /> Entregas
+          </Button>
+          <Button onClick={() => setActiveTab('stats')} className={cn(activeTab !== 'stats' && "bg-transparent text-black hover:bg-black/5")}>
+            <BarChart3 size={18} className="mr-2" /> Estatísticas
+          </Button>
+        </div>
+      )}
+
       {!isOnline ? (
         <Card className="py-12 text-center">
           <Truck size={48} className="mx-auto mb-4 text-black/10" />
@@ -789,27 +879,77 @@ function DriverDashboard({ user }: { user: UserData }) {
           {locationError && <p className="mb-4 text-sm text-red-500">{locationError}</p>}
           <Button onClick={goOnline} className="px-8">Ficar Online</Button>
         </Card>
+      ) : activeTab === 'stats' && stats ? (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="bg-emerald-600 text-white p-6">
+              <p className="text-sm text-white/60 mb-1">Total de Ganhos</p>
+              <p className="text-3xl font-bold">R$ {stats.earnings.toFixed(2)}</p>
+              <div className="mt-4 flex items-center text-xs text-white/40">
+                <DollarSign size={14} className="mr-1" /> Seu lucro acumulado
+              </div>
+            </Card>
+            <Card className="p-6">
+              <p className="text-sm text-black/50 mb-1">Corridas Finalizadas</p>
+              <p className="text-3xl font-bold">{stats.count}</p>
+              <div className="mt-4 flex items-center text-xs text-black/30">
+                <Truck size={14} className="mr-1" /> Entregas bem-sucedidas
+              </div>
+            </Card>
+          </div>
+          
+          <Card>
+            <h3 className="mb-4 font-bold">Últimas Atividades</h3>
+            <p className="text-center py-8 text-black/30 italic">O histórico detalhado de corridas aparecerá aqui.</p>
+          </Card>
+        </div>
       ) : activeOrder ? (
-        <Card className="border-emerald-500 bg-emerald-50/30">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-xl font-bold">Entrega em Andamento</h3>
-            <span className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-white uppercase">Ativo</span>
+        <Card className="border-emerald-500 bg-emerald-50/10 p-6">
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
+                <Truck size={24} />
+              </div>
+              <h3 className="text-xl font-bold">Entrega em Andamento</h3>
+            </div>
+            <span className="rounded-full bg-emerald-500 px-3 py-1 text-[10px] font-black text-white uppercase tracking-wider">Ativo</span>
           </div>
-          <div className="space-y-2">
-            <p><strong>Pedido:</strong> #{activeOrder.id}</p>
-            <p><strong>Restaurante:</strong> {activeOrder.restaurantName}</p>
-            <p><strong>Retirada:</strong> {activeOrder.restaurantAddress}</p>
-            <p><strong>Entrega:</strong> {activeOrder.address}</p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-4">
+              <div className="relative pl-6 before:content-[''] before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-black/10">
+                <div className="relative mb-4">
+                  <div className="absolute -left-[1.35rem] top-1 w-2.5 h-2.5 rounded-full bg-black ring-4 ring-white" />
+                  <p className="text-xs text-black/40 uppercase font-bold tracking-tight">Retirada</p>
+                  <p className="font-medium">{activeOrder.restaurantName}</p>
+                  <p className="text-sm text-black/50">{activeOrder.restaurantAddress}</p>
+                </div>
+                <div className="relative">
+                  <div className="absolute -left-[1.35rem] top-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-white" />
+                  <p className="text-xs text-emerald-500/60 uppercase font-bold tracking-tight">Entrega</p>
+                  <p className="font-medium">{activeOrder.address}</p>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="mt-6">
-            <Button onClick={() => completeOrder(activeOrder.id)} className="w-full bg-emerald-600 hover:bg-emerald-700">
+          <div className="mt-8 flex gap-3">
+             <Button variant="outline" className="flex-1" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activeOrder.address)}`)}>
+               <MapPin size={16} className="mr-2" /> Ver Rota
+             </Button>
+            <Button onClick={() => completeOrder(activeOrder.id)} className="flex-[2] bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200">
               Marcar como Entregue
             </Button>
           </div>
         </Card>
       ) : (
         <div className="space-y-4">
-          <h3 className="text-xl font-bold">Pedidos Disponíveis</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold">Pedidos Disponíveis</h3>
+            {stats && (
+              <div className="px-3 py-1 bg-black/5 rounded-full text-xs font-medium">
+                Hoje: <span className="font-bold">R$ {stats.earnings.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
           {availableOrders.map(order => (
             <Card key={order.id} className="flex items-center justify-between">
               <div>
@@ -894,6 +1034,12 @@ function ClientDashboard({ user }: { user: UserData }) {
     });
   };
 
+  const removeFromCart = (itemId: number) => {
+    setCart(prev => prev.filter(p => p.item.id !== itemId));
+  };
+
+  const totalPrice = cart.reduce((sum, i) => sum + i.item.price * i.quantity, 0);
+
   const placeOrder = async () => {
     if (user.status !== 'approved') {
       alert('Sua conta ainda não foi aprovada pelo administrador.');
@@ -911,7 +1057,6 @@ function ClientDashboard({ user }: { user: UserData }) {
   const confirmOrder = async () => {
     if (checkoutLoading) return;
     setCheckoutLoading(true);
-    const totalPrice = cart.reduce((sum, i) => sum + i.item.price * i.quantity, 0);
 
     const doRequest = async (lat: number, lng: number) => {
       const res = await fetch('/api/payment/pix', {
@@ -934,7 +1079,6 @@ function ClientDashboard({ user }: { user: UserData }) {
         setSelectedRestaurant(null);
         setAddress('');
 
-        // Poll payment status every 3s
         const interval = setInterval(async () => {
           try {
             const r = await fetch(`/api/payment/status/${data.orderId}`);
@@ -947,7 +1091,6 @@ function ClientDashboard({ user }: { user: UserData }) {
           } catch {}
         }, 3000);
 
-        // Countdown timer
         const timer = setInterval(() => {
           setPixCountdown(prev => {
             if (prev <= 1) { clearInterval(timer); return 0; }
@@ -971,96 +1114,253 @@ function ClientDashboard({ user }: { user: UserData }) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-12 animate-in fade-in duration-700">
+      {/* Tracking Banner */}
       {trackingOrder && (
-        <Card className="border-emerald-500 bg-emerald-50">
+        <Card className="border-emerald-500 bg-emerald-50 shadow-lg shadow-emerald-100 p-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 animate-pulse items-center justify-center rounded-full bg-emerald-500 text-white">
-                <Truck size={20} />
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 animate-pulse items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-200">
+                <Truck size={24} />
               </div>
               <div>
-                <p className="font-bold">Seu pedido está a caminho!</p>
-                <p className="text-xs text-black/50">Localização do entregador: {trackingOrder.lat.toFixed(4)}, {trackingOrder.lng.toFixed(4)}</p>
+                <p className="font-black text-emerald-900 tracking-tight">Seu pedido está chegando!</p>
+                <div className="flex items-center gap-2 text-xs text-emerald-700/60">
+                   <MapPin size={12} />
+                   <span>Localização atualizada em tempo real</span>
+                </div>
               </div>
             </div>
-            <Button size="sm" variant="ghost" onClick={() => setTrackingOrder(null)}><X size={16} /></Button>
+            <Button size="sm" variant="ghost" onClick={() => setTrackingOrder(null)} className="hover:bg-emerald-100 text-emerald-600">
+              <X size={18} />
+            </Button>
           </div>
         </Card>
       )}
 
-      {!selectedRestaurant ? (
-        <div className="space-y-8">
-          <section>
-            <h3 className="mb-4 text-xl font-bold">Seus Pedidos</h3>
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-              {orders.map(order => (
-                <Card key={order.id} className="min-w-[280px] flex-shrink-0">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-bold text-black/30 uppercase">#{order.id}</span>
-                    <span className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase",
-                      order.status === 'delivered' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                    )}>
-                      {order.status.replace(/_/g, ' ')}
-                    </span>
+      {/* PIX Modal */}
+      {pixData && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md overflow-hidden bg-white p-0 shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="bg-emerald-600 p-8 text-center text-white">
+              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-white/20">
+                <Check size={40} className={cn(pixStatus === 'paid' ? 'scale-100' : 'scale-0')} />
+                {pixStatus !== 'paid' && <DollarSign size={40} />}
+              </div>
+              <h3 className="text-2xl font-black">
+                {pixStatus === 'paid' ? 'Pagamento Confirmado!' : 'Aguardando Pagamento'}
+              </h3>
+              <p className="text-white/60">Delivr • PagSeguro PIX</p>
+            </div>
+            
+            <div className="p-8">
+              {pixStatus === 'paid' ? (
+                <div className="text-center animate-in fade-in slide-in-from-bottom-4">
+                  <p className="mb-6 text-black/60">O restaurante já foi notificado e está preparando seu pedido com carinho.</p>
+                  <Button onClick={() => setPixData(null)} className="w-full bg-black">Entendido</Button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex flex-col items-center">
+                    <img src={pixData.qrCodeBase64} alt="QR Code PIX" className="mb-4 h-48 w-48 rounded-xl border border-black/5 p-2 shadow-inner" />
+                    <div className="flex items-center gap-2 text-sm font-bold text-black/40">
+                      <Clock size={16} />
+                      Expira em {Math.floor(pixCountdown / 60)}:{(pixCountdown % 60).toString().padStart(2, '0')}
+                    </div>
                   </div>
-                  <p className="font-bold">{order.restaurantName}</p>
-                  <p className="text-sm font-mono">R$ {order.total_price.toFixed(2)}</p>
-                  {order.status === 'out_for_delivery' && (
-                    <Button size="sm" className="mt-4 w-full" onClick={() => setTrackingOrder({ id: order.id, lat: 0, lng: 0 })}>
-                      Rastrear
-                    </Button>
-                  )}
-                </Card>
-              ))}
-              {orders.length === 0 && <p className="text-black/30">Nenhum pedido realizado ainda.</p>}
+                  
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-black/40">Código Copia e Cola</label>
+                    <div className="flex gap-2">
+                      <input 
+                        readOnly 
+                        value={pixData.pixText} 
+                        className="flex-1 rounded-xl bg-black/5 px-4 py-2 text-xs font-mono" 
+                      />
+                      <Button size="sm" onClick={() => {
+                        navigator.clipboard.writeText(pixData.pixText);
+                        setPixCopied(true);
+                        setTimeout(() => setPixCopied(false), 2000);
+                      }}>
+                        {pixCopied ? <Check size={16} /> : <Plus size={16} />}
+                      </Button>
+                    </div>
+                    {pixCopied && <p className="text-center text-[10px] text-emerald-600 font-bold">Copiado para a área de transferência!</p>}
+                  </div>
+                  
+                  <div className="flex items-center justify-center gap-2 rounded-xl bg-amber-50 p-4 text-xs font-medium text-amber-700">
+                    <Star size={14} />
+                    <span>Não feche esta página até o pagamento ser confirmado.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {!selectedRestaurant && !pixData && (
+        <>
+          <section className="relative overflow-hidden rounded-[2.5rem] bg-black p-10 text-white md:p-16">
+            <div className="relative z-10 max-w-xl">
+              <span className="mb-4 inline-block rounded-full bg-white/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-white/60">Sua comida favorita</span>
+              <h2 className="mb-6 text-5xl font-black leading-none tracking-tighter md:text-7xl">
+                O melhor da cidade <span className="text-emerald-500">na sua mão.</span>
+              </h2>
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <div className="relative flex-1">
+                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={20} />
+                  <input 
+                    placeholder="Onde vamos entregar?" 
+                    value={address} 
+                    onChange={e => setAddress(e.target.value)}
+                    className="w-full rounded-2xl border-none bg-white/10 pl-12 pr-6 py-5 text-white placeholder:text-white/30 focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="absolute -right-20 -top-20 h-full w-1/2 opacity-10 blur-3xl">
+               <div className="h-full w-full rounded-full bg-emerald-500" />
             </div>
           </section>
 
-          <section>
-            <h3 className="mb-4 text-xl font-bold">Restaurantes</h3>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <section className="space-y-8">
+            <div className="flex items-center justify-between">
+              <h3 className="text-3xl font-black tracking-tighter">Escolha seu Restaurante</h3>
+              <div className="hidden gap-2 md:flex">
+                {['Tudo', '🍕 Pizza', '🍔 Burger', '🇯🇵 Japa', '🇮🇹 Massa'].map(cat => (
+                  <button key={cat} className="rounded-full bg-black/5 px-6 py-2.5 text-xs font-black uppercase transition-all hover:bg-black hover:text-white">
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
               {restaurants.map(r => (
-                <Card key={r.id} className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => selectRestaurant(r)}>
-                  <div className="mb-4 h-32 w-full rounded-xl bg-black/5 flex items-center justify-center">
-                    <Store size={40} className="text-black/10" />
+                <div 
+                  key={r.id} 
+                  onClick={() => selectRestaurant(r)} 
+                  className="group cursor-pointer space-y-4"
+                >
+                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[2rem] bg-black/5 shadow-xl transition-all duration-500 group-hover:-translate-y-2 group-hover:shadow-black/10">
+                    <img 
+                      src={`https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=600&auto=format&fit=crop`} 
+                      alt={r.name} 
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                    <div className="absolute bottom-4 left-4 flex gap-2">
+                       <span className="rounded-full bg-white/90 backdrop-blur px-3 py-1 text-[10px] font-black uppercase text-black">{r.category}</span>
+                    </div>
                   </div>
-                  <h4 className="text-lg font-bold">{r.name}</h4>
-                  <p className="text-sm text-black/50">{r.category} • {r.address}</p>
-                  <div className="mt-4 flex items-center gap-4 text-xs font-medium text-black/60">
-                    <span className="flex items-center gap-1"><Star size={14} className="text-amber-400" /> 4.8</span>
-                    <span className="flex items-center gap-1"><Clock size={14} /> 20-30 min</span>
+                  <div className="px-2">
+                    <div className="mb-1 flex items-center justify-between">
+                      <h4 className="text-lg font-black tracking-tight">{r.name}</h4>
+                      <div className="flex items-center text-xs font-black text-amber-500">
+                        <Star size={14} className="mr-1 fill-amber-500" /> 4.9
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] font-bold text-black/30">
+                      <span className="flex items-center"><Clock size={12} className="mr-1" /> 25-40 min</span>
+                      <span className="flex items-center"><DollarSign size={12} className="mr-1" /> Grátis</span>
+                    </div>
                   </div>
-                </Card>
+                </div>
               ))}
             </div>
           </section>
-        </div>
-      ) : (
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <button onClick={() => setSelectedRestaurant(null)} className="flex items-center gap-2 text-sm font-medium text-black/50 hover:text-black">
-              <ChevronRight size={16} className="rotate-180" /> Voltar para restaurantes
-            </button>
-            <div className="flex items-center justify-between">
-              <h2 className="text-3xl font-bold">{selectedRestaurant.name}</h2>
-              <span className="rounded-full bg-black/5 px-3 py-1 text-sm font-medium">{selectedRestaurant.category}</span>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {menu.map(item => (
-                <Card key={item.id} className="flex gap-4 p-4">
-                  <img src={item.image} alt={item.name} className="h-24 w-24 rounded-xl object-cover" referrerPolicy="no-referrer" />
-                  <div className="flex flex-1 flex-col justify-between">
-                    <div>
-                      <p className="font-bold">{item.name}</p>
-                      <p className="text-xs text-black/50 line-clamp-2">{item.description}</p>
+
+          {orders.length > 0 && (
+            <section className="rounded-[2.5rem] bg-black/5 p-8 md:p-12">
+              <h3 className="mb-10 text-3xl font-black tracking-tighter">Histórico de Pedidos</h3>
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {orders.map(order => (
+                  <Card key={order.id} className="group border-none bg-white p-6 shadow-sm shadow-black/5 transition-all hover:shadow-xl">
+                    <div className="mb-6 flex items-center justify-between">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/5 text-black/20 font-black">
+                         {order.id}
+                      </div>
+                      <span className={cn(
+                        "rounded-full px-4 py-1 text-[10px] font-black uppercase tracking-widest",
+                        order.status === 'pending' ? "bg-amber-100 text-amber-600" :
+                        order.status === 'preparing' ? "bg-blue-100 text-blue-600" :
+                        order.status === 'out_for_delivery' ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200" : "bg-black/5 text-black/40"
+                      )}>
+                        {order.status === 'pending' ? 'Recebido' :
+                         order.status === 'preparing' ? 'Preparando' :
+                         order.status === 'out_for_delivery' ? 'A caminho' :
+                         order.status === 'delivered' ? 'Finalizado' : order.status}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold">R$ {item.price.toFixed(2)}</span>
-                      <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full p-0 hover:bg-black hover:text-white" onClick={() => addToCart(item)}>
-                        <Plus size={16} />
-                      </Button>
+                    <div>
+                      <h4 className="text-xl font-black mb-1">{order.restaurantName}</h4>
+                      <p className="text-xs font-medium text-black/40 mb-6">{new Date(order.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                      
+                      <div className="flex items-center justify-between border-t border-black/5 pt-6">
+                        <p className="text-lg font-black text-emerald-600">R$ {order.total_price.toFixed(2)}</p>
+                        <Button variant="outline" size="sm" className="rounded-xl font-black text-[10px] tracking-widest uppercase h-10 px-6 group-hover:bg-black group-hover:text-white transition-all">Ver Detalhes</Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {selectedRestaurant && (
+        <div className="grid gap-12 lg:grid-cols-12">
+          <div className="lg:col-span-8 space-y-10">
+            <button 
+              onClick={() => setSelectedRestaurant(null)} 
+              className="group flex items-center text-sm font-black uppercase tracking-widest text-black/40 transition-colors hover:text-black"
+            >
+              <Plus size={20} className="mr-2 rotate-45 transition-transform group-hover:rotate-0" /> Voltar
+            </button>
+            
+            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h3 className="text-5xl font-black tracking-tighter mb-2">{selectedRestaurant.name}</h3>
+                <p className="flex items-center text-black/40 font-bold">
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] text-emerald-600 mr-3">{selectedRestaurant.category}</span>
+                  <MapPin size={14} className="mr-1" /> {selectedRestaurant.address}
+                </p>
+              </div>
+              <div className="flex gap-4">
+                 <div className="text-center bg-black/5 rounded-2xl p-4 min-w-[100px]">
+                    <p className="text-[10px] font-black uppercase text-black/30">Avaliação</p>
+                    <p className="text-xl font-black flex items-center justify-center gap-1">4.8 <Star size={14} className="fill-amber-400 text-amber-400"/></p>
+                 </div>
+                 <div className="text-center bg-black/5 rounded-2xl p-4 min-w-[100px]">
+                    <p className="text-[10px] font-black uppercase text-black/30">Entrega</p>
+                    <p className="text-xl font-black">25m</p>
+                 </div>
+              </div>
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-2">
+              {menu.map(item => (
+                <Card key={item.id} className="group overflow-hidden border-none bg-black/5 p-0 transition-all hover:bg-white hover:shadow-2xl">
+                  <div className="flex">
+                    <div className="p-6 flex-1 space-y-4">
+                      <div>
+                        <h4 className="text-lg font-black tracking-tight">{item.name}</h4>
+                        <p className="text-xs text-black/40 line-clamp-2 mt-1">{item.description}</p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-lg font-black text-emerald-600 tracking-tighter">R$ {item.price.toFixed(2)}</p>
+                        <button 
+                          onClick={() => addToCart(item)}
+                          className="flex h-10 w-10 items-center justify-center rounded-xl bg-black text-white shadow-lg transition-transform active:scale-95"
+                        >
+                          <Plus size={20} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="aspect-square w-32 overflow-hidden">
+                      <img src={item.image} alt={item.name} className="h-full w-full object-cover grayscale-[0.5] group-hover:grayscale-0 transition-all" referrerPolicy="no-referrer" />
                     </div>
                   </div>
                 </Card>
@@ -1068,128 +1368,72 @@ function ClientDashboard({ user }: { user: UserData }) {
             </div>
           </div>
 
-          <div className="lg:col-span-1">
-            <Card className="sticky top-24">
-              <h3 className="mb-6 text-xl font-bold">Seu Carrinho</h3>
-              {cart.length === 0 ? (
-                <div className="py-12 text-center">
-                  <ShoppingBag size={40} className="mx-auto mb-4 text-black/10" />
-                  <p className="text-black/50">Carrinho vazio</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {cart.map(i => (
-                    <div key={i.item.id} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold">{i.quantity}x</span>
-                        <span>{i.item.name}</span>
-                      </div>
-                      <span className="font-mono">R$ {(i.item.price * i.quantity).toFixed(2)}</span>
-                    </div>
-                  ))}
-                  <div className="mt-6 border-t border-black/5 pt-4">
-                    <div className="mb-4">
-                      <label className="mb-1 block text-sm font-medium">Endereço de Entrega</label>
-                      <input 
-                        type="text" 
-                        placeholder="Ex: Rua das Flores, 123"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        className="w-full rounded-xl border border-black/10 px-4 py-2 text-sm focus:border-black focus:outline-none"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between font-bold">
-                      <span>Total</span>
-                      <span className="font-mono">R$ {cart.reduce((s, i) => s + i.item.price * i.quantity, 0).toFixed(2)}</span>
-                    </div>
-                    <Button className="mt-6 w-full py-4" onClick={placeOrder}>Finalizar Pedido</Button>
+          <div className="lg:col-span-4">
+            <Card className="sticky top-24 overflow-hidden border-none bg-black text-white p-0 shadow-2xl">
+              <div className="p-8 pb-4">
+                <h3 className="text-2xl font-black tracking-tighter flex items-center gap-3">
+                  <ShoppingBag size={24} className="text-emerald-500" /> Seu Pedido
+                </h3>
+              </div>
+              
+              <div className="p-8 pt-4 space-y-8">
+                {cart.length === 0 ? (
+                  <div className="py-12 text-center text-white/20">
+                    <ShoppingBag size={64} className="mx-auto mb-4 opacity-5" />
+                    <p className="text-sm font-bold uppercase tracking-widest">Carrinho Vazio</p>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <>
+                    <div className="space-y-6 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                      {cart.map(c => (
+                        <div key={c.item.id} className="flex justify-between items-center group animate-in slide-in-from-right-4">
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-xs font-black">
+                               {c.quantity}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm tracking-tight">{c.item.name}</p>
+                              <p className="text-[10px] font-black text-white/30 uppercase tracking-widest">R$ {c.item.price.toFixed(2)}</p>
+                            </div>
+                          </div>
+                          <button onClick={() => removeFromCart(c.item.id)} className="p-2 text-white/20 hover:text-red-400 transition-colors">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-6 border-t border-white/10 pt-8">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Endereço de Entrega</label>
+                        <input 
+                          placeholder="Digite o endereço..." 
+                          value={address} 
+                          onChange={e => setAddress(e.target.value)} 
+                          className="w-full rounded-xl border-none bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/20 focus:ring-2 focus:ring-emerald-500/50" 
+                        />
+                      </div>
+
+                      <div className="flex items-end justify-between">
+                        <p className="text-xs font-bold text-white/40 uppercase tracking-widest">Total Geral</p>
+                        <p className="text-4xl font-black text-emerald-500 tracking-tighter">R$ {cart.reduce((s, i) => s + i.item.price * i.quantity, 0).toFixed(2)}</p>
+                      </div>
+
+                      <Button 
+                        onClick={confirmOrder} 
+                        className="h-16 w-full bg-emerald-600 text-lg font-black uppercase tracking-widest shadow-xl shadow-emerald-900/20 hover:bg-emerald-500 hover:scale-[1.02] active:scale-95 transition-all" 
+                        disabled={checkoutLoading}
+                      >
+                        {checkoutLoading ? "Processando..." : "Confirmar e Pagar"}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
             </Card>
           </div>
         </div>
       )}
-
-      <AnimatePresence>
-        {showConfirm && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}>
-              <Card className="w-full max-w-md">
-                <h3 className="mb-4 text-xl font-bold">Confirmar Pedido</h3>
-                <p className="mb-6 text-black/60">
-                  Seu pedido será entregue em: <br />
-                  <strong className="text-black">{address}</strong>
-                </p>
-                <p className="mb-6 text-sm text-black/50">
-                  Após confirmar, você receberá o <strong>QR Code PIX</strong> para pagamento.
-                </p>
-                <div className="flex gap-4">
-                  <Button variant="ghost" className="flex-1" onClick={() => setShowConfirm(false)} disabled={checkoutLoading}>Cancelar</Button>
-                  <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={confirmOrder} disabled={checkoutLoading}>
-                    {checkoutLoading ? 'Gerando PIX...' : 'Pagar com PIX'}
-                  </Button>
-                </div>
-              </Card>
-            </motion.div>
-          </div>
-        )}
-
-        {pixData && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-sm">
-              <Card className="text-center">
-                {pixStatus === 'paid' ? (
-                  <div className="py-8">
-                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white">
-                      <Check size={32} />
-                    </div>
-                    <h3 className="mb-2 text-2xl font-bold text-emerald-600">Pago! ✅</h3>
-                    <p className="mb-6 text-black/60">Seu pedido foi confirmado e está sendo preparado.</p>
-                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => setPixData(null)}>Ver Meus Pedidos</Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="mb-2 flex items-center justify-between">
-                      <h3 className="text-lg font-bold">Pague com PIX</h3>
-                      <span className={cn(
-                        "rounded-full px-3 py-1 text-xs font-bold",
-                        pixCountdown > 0 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
-                      )}>
-                        {pixCountdown > 0
-                          ? `${String(Math.floor(pixCountdown / 60)).padStart(2, '0')}:${String(pixCountdown % 60).padStart(2, '0')}`
-                          : 'Expirado'}
-                      </span>
-                    </div>
-                    <p className="mb-4 text-sm text-black/50">Escaneie o QR Code ou copie o código PIX</p>
-                    {pixData.qrCodeBase64 && (
-                      <img src={pixData.qrCodeBase64} alt="QR Code PIX" className="mx-auto mb-4 h-52 w-52 rounded-xl border border-black/10" />
-                    )}
-                    <div className="mb-4 rounded-xl bg-black/5 p-3">
-                      <p className="mb-2 text-xs font-bold uppercase text-black/40">Copia e Cola</p>
-                      <p className="break-all text-xs text-black/70 line-clamp-3">{pixData.pixText}</p>
-                    </div>
-                    <Button
-                      className={cn("mb-3 w-full", pixCopied ? "bg-emerald-600 hover:bg-emerald-700" : "")}
-                      onClick={() => {
-                        navigator.clipboard.writeText(pixData.pixText);
-                        setPixCopied(true);
-                        setTimeout(() => setPixCopied(false), 3000);
-                      }}
-                    >
-                      {pixCopied ? '✅ Copiado!' : 'Copiar Código PIX'}
-                    </Button>
-                    <div className="flex items-center justify-center gap-2 text-xs text-black/40">
-                      <div className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-                      Aguardando confirmação do pagamento...
-                    </div>
-                  </>
-                )}
-              </Card>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

@@ -171,6 +171,60 @@ async function startServer() {
       res.json({ restaurantStats, driverStats });
     });
 
+    // New Stats Endpoints
+    app.get('/api/stats/restaurant/:userId', (req, res) => {
+      const restaurant = db.prepare('SELECT id FROM restaurants WHERE userId = ?').get(req.params.userId) as any;
+      if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+      // Total earnings and count
+      const totals = db.prepare(`
+        SELECT 
+          SUM(total_price) as gross,
+          COUNT(id) as count
+        FROM orders 
+        WHERE restaurantId = ? AND status = 'delivered'
+      `).get(restaurant.id) as any;
+
+      const gross = totals.gross || 0;
+      const net = gross * 0.87; // 13% commission
+
+      // Stats by day (last 7 days)
+      const daily = db.prepare(`
+        SELECT 
+          date(created_at) as day,
+          COUNT(id) as count,
+          SUM(total_price) as gross
+        FROM orders
+        WHERE restaurantId = ? AND status = 'delivered'
+        AND created_at >= date('now', '-7 days')
+        GROUP BY day
+        ORDER BY day ASC
+      `).all(restaurant.id);
+
+      res.json({
+        gross,
+        net,
+        count: totals.count || 0,
+        daily
+      });
+    });
+
+    app.get('/api/stats/driver/:userId', (req, res) => {
+      // Assuming a fixed earnings per delivery for now, or total delivered count
+      const stats = db.prepare(`
+        SELECT 
+          COUNT(id) as count,
+          SUM(total_price * 0.10) as earnings -- Example: 10% of order goes to driver
+        FROM orders
+        WHERE driverId = ? AND status = 'delivered'
+      `).get(req.params.userId) as any;
+
+      res.json({
+        count: stats.count || 0,
+        earnings: stats.earnings || 0
+      });
+    });
+
     // Restaurant Routes
     app.get('/api/restaurants', (req, res) => {
       const restaurants = db.prepare('SELECT * FROM restaurants').all();
