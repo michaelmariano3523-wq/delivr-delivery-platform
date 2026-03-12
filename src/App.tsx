@@ -681,6 +681,23 @@ function DriverDashboard({ user }: { user: UserData }) {
   const [locationError, setLocationError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
 
+  // Restore active order and online status after page refresh
+  useEffect(() => {
+    const restoreActiveOrder = async () => {
+      try {
+        const res = await fetch(`/api/orders/driver/${user.id}/active`);
+        const order = await res.json();
+        if (order) {
+          setActiveOrder(order);
+          setIsOnline(true);
+        }
+      } catch (e) {
+        console.error('Failed to restore active order:', e);
+      }
+    };
+    restoreActiveOrder();
+  }, [user.id]);
+
   useEffect(() => {
     if (isOnline) {
       fetchAvailable();
@@ -831,9 +848,14 @@ function ClientDashboard({ user }: { user: UserData }) {
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === 'location_update') {
+      // Bug fix: driver sends 'update_location', not 'location_update'
+      if (data.type === 'update_location') {
         setTrackingOrder(prev => {
           if (prev && prev.id === data.orderId) {
+            return { id: data.orderId, lat: data.lat, lng: data.lng };
+          }
+          // Auto-start tracking if not already tracking this order
+          if (data.orderId) {
             return { id: data.orderId, lat: data.lat, lng: data.lng };
           }
           return prev;

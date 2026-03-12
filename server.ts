@@ -240,6 +240,18 @@ async function startServer() {
       res.json(orders);
     });
 
+    // Get driver's current active order (for restoring state after refresh)
+    app.get('/api/orders/driver/:driverId/active', (req, res) => {
+      const order = db.prepare(`
+        SELECT o.*, r.name as restaurantName, r.address as restaurantAddress
+        FROM orders o
+        JOIN restaurants r ON o.restaurantId = r.id
+        WHERE o.driverId = ? AND o.status = 'out_for_delivery'
+        LIMIT 1
+      `).get(req.params.driverId) as any;
+      res.json(order || null);
+    });
+
     app.get('/api/orders/driver/available', (req, res) => {
       const orders = db.prepare(`
         SELECT o.*, r.name as restaurantName, r.address as restaurantAddress
