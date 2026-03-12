@@ -839,6 +839,11 @@ function ClientDashboard({ user }: { user: UserData }) {
   const [address, setAddress] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [trackingOrder, setTrackingOrder] = useState<{ id: number, lat: number, lng: number } | null>(null);
+  const [pixData, setPixData] = useState<{ orderId: number, pixText: string, qrCodeBase64: string } | null>(null);
+  const [pixStatus, setPixStatus] = useState<'awaiting' | 'paid' | 'error'>('awaiting');
+  const [pixCountdown, setPixCountdown] = useState(600); // 10 minutes
+  const [pixCopied, setPixCopied] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   useEffect(() => {
     fetchRestaurants();
@@ -904,36 +909,65 @@ function ClientDashboard({ user }: { user: UserData }) {
   };
 
   const confirmOrder = async () => {
+    if (checkoutLoading) return;
+    setCheckoutLoading(true);
     const totalPrice = cart.reduce((sum, i) => sum + i.item.price * i.quantity, 0);
-    
-    // Get client location
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      const res = await fetch('/api/orders', {
+
+    const doRequest = async (lat: number, lng: number) => {
+      const res = await fetch('/api/payment/pix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientId: user.id,
           restaurantId: selectedRestaurant!.id,
           items: cart.map(i => ({ id: i.item.id, quantity: i.quantity, price: i.item.price })),
-          totalPrice,
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          address
+          totalPrice, lat, lng, address
         })
       });
+      const data = await res.json();
       if (res.ok) {
+        setPixData({ orderId: data.orderId, pixText: data.pixText, qrCodeBase64: data.qrCodeBase64 });
+        setPixStatus('awaiting');
+        setPixCountdown(600);
+        setShowConfirm(false);
         setCart([]);
         setSelectedRestaurant(null);
         setAddress('');
-        setShowConfirm(false);
-        fetchOrders();
+
+        // Poll payment status every 3s
+        const interval = setInterval(async () => {
+          try {
+            const r = await fetch(`/api/payment/status/${data.orderId}`);
+            const s = await r.json();
+            if (s.status === 'paid') {
+              setPixStatus('paid');
+              clearInterval(interval);
+              fetchOrders();
+            }
+          } catch {}
+        }, 3000);
+
+        // Countdown timer
+        const timer = setInterval(() => {
+          setPixCountdown(prev => {
+            if (prev <= 1) { clearInterval(timer); return 0; }
+            return prev - 1;
+          });
+        }, 1000);
       } else {
-        const data = await res.json();
-        alert(data.error);
+        alert(data.error || 'Erro ao gerar PIX');
       }
-    }, () => {
-      alert('É necessário compartilhar sua localização para realizar o pedido.');
-    });
+      setCheckoutLoading(false);
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => doRequest(pos.coords.latitude, pos.coords.longitude),
+        () => doRequest(0, 0)
+      );
+    } else {
+      doRequest(0, 0);
+    }
   };
 
   return (
@@ -1088,12 +1122,69 @@ function ClientDashboard({ user }: { user: UserData }) {
                   <strong className="text-black">{address}</strong>
                 </p>
                 <p className="mb-6 text-sm text-black/50">
-                  Também utilizaremos sua localização GPS atual para ajudar o entregador a encontrar você com mais precisão.
+                  Após confirmar, você receberá o <strong>QR Code PIX</strong> para pagamento.
                 </p>
                 <div className="flex gap-4">
-                  <Button variant="ghost" className="flex-1" onClick={() => setShowConfirm(false)}>Cancelar</Button>
-                  <Button className="flex-1" onClick={confirmOrder}>Confirmar e Pagar</Button>
+                  <Button variant="ghost" className="flex-1" onClick={() => setShowConfirm(false)} disabled={checkoutLoading}>Cancelar</Button>
+                  <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={confirmOrder} disabled={checkoutLoading}>
+                    {checkoutLoading ? 'Gerando PIX...' : 'Pagar com PIX'}
+                  </Button>
                 </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+
+        {pixData && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-sm">
+              <Card className="text-center">
+                {pixStatus === 'paid' ? (
+                  <div className="py-8">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white">
+                      <Check size={32} />
+                    </div>
+                    <h3 className="mb-2 text-2xl font-bold text-emerald-600">Pago! ✅</h3>
+                    <p className="mb-6 text-black/60">Seu pedido foi confirmado e está sendo preparado.</p>
+                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => setPixData(null)}>Ver Meus Pedidos</Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-lg font-bold">Pague com PIX</h3>
+                      <span className={cn(
+                        "rounded-full px-3 py-1 text-xs font-bold",
+                        pixCountdown > 0 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                      )}>
+                        {pixCountdown > 0
+                          ? `${String(Math.floor(pixCountdown / 60)).padStart(2, '0')}:${String(pixCountdown % 60).padStart(2, '0')}`
+                          : 'Expirado'}
+                      </span>
+                    </div>
+                    <p className="mb-4 text-sm text-black/50">Escaneie o QR Code ou copie o código PIX</p>
+                    {pixData.qrCodeBase64 && (
+                      <img src={pixData.qrCodeBase64} alt="QR Code PIX" className="mx-auto mb-4 h-52 w-52 rounded-xl border border-black/10" />
+                    )}
+                    <div className="mb-4 rounded-xl bg-black/5 p-3">
+                      <p className="mb-2 text-xs font-bold uppercase text-black/40">Copia e Cola</p>
+                      <p className="break-all text-xs text-black/70 line-clamp-3">{pixData.pixText}</p>
+                    </div>
+                    <Button
+                      className={cn("mb-3 w-full", pixCopied ? "bg-emerald-600 hover:bg-emerald-700" : "")}
+                      onClick={() => {
+                        navigator.clipboard.writeText(pixData.pixText);
+                        setPixCopied(true);
+                        setTimeout(() => setPixCopied(false), 3000);
+                      }}
+                    >
+                      {pixCopied ? '✅ Copiado!' : 'Copiar Código PIX'}
+                    </Button>
+                    <div className="flex items-center justify-center gap-2 text-xs text-black/40">
+                      <div className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+                      Aguardando confirmação do pagamento...
+                    </div>
+                  </>
+                )}
               </Card>
             </motion.div>
           </div>

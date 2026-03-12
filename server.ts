@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
 import Database from 'better-sqlite3';
+import QRCode from 'qrcode';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -72,7 +73,7 @@ db.exec(`
 const migrate = () => {
   const tables = {
     users: { id_document: 'TEXT', selfie: 'TEXT' },
-    orders: { client_lat: 'REAL', client_lng: 'REAL', address: 'TEXT' }
+    orders: { client_lat: 'REAL', client_lng: 'REAL', address: 'TEXT', payment_id: 'TEXT', payment_status: 'TEXT' }
   };
 
   for (const [table, columns] of Object.entries(tables)) {
@@ -270,6 +271,109 @@ async function startServer() {
         db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, req.params.id);
       }
       res.json({ success: true });
+    });
+    // PIX Payment Routes
+    app.post('/api/payment/pix', async (req, res) => {
+      const { clientId, restaurantId, items, totalPrice, lat, lng, address } = req.body;
+
+      const client = db.prepare('SELECT status FROM users WHERE id = ?').get(clientId) as any;
+      if (!client || client.status !== 'approved') {
+        return res.status(403).json({ error: 'Sua conta ainda não foi aprovada.' });
+      }
+
+      // Create order with awaiting_payment status
+      const result = db.prepare(
+        'INSERT INTO orders (clientId, restaurantId, status, total_price, client_lat, client_lng, address, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(clientId, restaurantId, 'pending', totalPrice, lat || 0, lng || 0, address, 'awaiting_payment');
+      const orderId = result.lastInsertRowid;
+
+      const stmt = db.prepare('INSERT INTO order_items (orderId, menuItemId, quantity, price) VALUES (?, ?, ?, ?)');
+      for (const item of items) {
+        stmt.run(orderId, item.id, item.quantity, item.price);
+      }
+
+      // Create PIX charge via PagSeguro
+      const amountInCents = Math.round(totalPrice * 100);
+      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+      const psEnv = process.env.PAGSEGURO_ENV === 'production' ? '' : 'sandbox.';
+
+      try {
+        const psRes = await fetch(`https://${psEnv}api.pagseguro.com/charges`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.PAGSEGURO_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            reference_id: `order_${orderId}`,
+            description: `Pedido DelivR #${orderId}`,
+            amount: { value: amountInCents, currency: 'BRL' },
+            payment_method: { type: 'PIX', installments: 1, capture: true },
+            notification_urls: [`${appUrl}/api/payment/webhook`]
+          })
+        });
+
+        const psData = await psRes.json() as any;
+
+        if (!psRes.ok) {
+          throw new Error(JSON.stringify(psData));
+        }
+
+        const paymentId = psData.id;
+        const pixText = psData.qr_codes?.[0]?.text || '';
+
+        db.prepare('UPDATE orders SET payment_id = ? WHERE id = ?').run(paymentId, orderId);
+
+        // Generate QR code as base64 image
+        const qrCodeBase64 = await QRCode.toDataURL(pixText, { width: 300, margin: 2 });
+
+        res.json({ orderId, paymentId, pixText, qrCodeBase64 });
+      } catch (err) {
+        // Rollback order on PagSeguro failure
+        db.prepare('DELETE FROM order_items WHERE orderId = ?').run(orderId);
+        db.prepare('DELETE FROM orders WHERE id = ?').run(orderId);
+        console.error('PagSeguro PIX error:', err);
+        res.status(500).json({ error: 'Erro ao gerar PIX. Verifique o token do PagSeguro.' });
+      }
+    });
+
+    app.get('/api/payment/status/:orderId', async (req, res) => {
+      const order = db.prepare('SELECT payment_id, payment_status FROM orders WHERE id = ?').get(req.params.orderId) as any;
+      if (!order) return res.status(404).json({ error: 'Pedido não encontrado' });
+      if (order.payment_status === 'paid') return res.json({ status: 'paid' });
+      if (!order.payment_id) return res.json({ status: 'awaiting_payment' });
+
+      const psEnv = process.env.PAGSEGURO_ENV === 'production' ? '' : 'sandbox.';
+      try {
+        const psRes = await fetch(`https://${psEnv}api.pagseguro.com/charges/${order.payment_id}`, {
+          headers: { 'Authorization': `Bearer ${process.env.PAGSEGURO_TOKEN}` }
+        });
+        const psData = await psRes.json() as any;
+
+        if (psData.status === 'PAID') {
+          db.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').run('paid', req.params.orderId);
+          return res.json({ status: 'paid' });
+        }
+        return res.json({ status: (psData.status || 'awaiting_payment').toLowerCase() });
+      } catch {
+        return res.json({ status: order.payment_status || 'awaiting_payment' });
+      }
+    });
+
+    app.post('/api/payment/webhook', (req, res) => {
+      const { charges } = req.body || {};
+      if (Array.isArray(charges)) {
+        for (const charge of charges) {
+          if (charge.status === 'PAID') {
+            const orderId = charge.reference_id?.replace('order_', '');
+            if (orderId) {
+              db.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').run('paid', orderId);
+              console.log(`Payment confirmed for order ${orderId}`);
+            }
+          }
+        }
+      }
+      res.sendStatus(200);
     });
 
     // WebSockets
