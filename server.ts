@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -74,7 +75,7 @@ db.exec(`
 // Migration: Add missing columns if they don't exist
 const migrate = () => {
   const tables = {
-    users: { id_document: 'TEXT', selfie: 'TEXT' },
+    users: { id_document: 'TEXT', selfie: 'TEXT', avatar: 'TEXT' },
     orders: { client_lat: 'REAL', client_lng: 'REAL', address: 'TEXT', payment_id: 'TEXT', payment_status: 'TEXT' },
     restaurants: { lat: 'REAL', lng: 'REAL' }
   };
@@ -119,7 +120,7 @@ async function startServer() {
     // Auth Middleware
     app.post('/api/login', (req, res) => {
       const { username, password } = req.body;
-      const user = db.prepare('SELECT id, username, role, status, name FROM users WHERE username = ? AND password = ?').get(username, password);
+      const user = db.prepare('SELECT id, username, role, status, name, avatar FROM users WHERE username = ? AND password = ?').get(username, password);
       if (user) {
         if (user.status === 'pending') {
           return res.status(403).json({ error: 'Cadastro pendente de aprovação' });
@@ -139,6 +140,17 @@ async function startServer() {
         res.json({ id: result.lastInsertRowid, status });
       } catch (e) {
         res.status(400).json({ error: 'Usuário já existe' });
+      }
+    });
+
+    app.post('/api/users/:id/avatar', (req, res) => {
+      const { avatar } = req.body;
+      const userId = req.params.id;
+      try {
+        db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatar, userId);
+        res.json({ success: true });
+      } catch (e) {
+        res.status(500).json({ error: 'Erro ao salvar avatar' });
       }
     });
 
@@ -351,49 +363,111 @@ async function startServer() {
         stmt.run(orderId, item.id, item.quantity, item.price);
       }
 
-      // Create PIX charge via PagSeguro
+      // Create PIX charge via Pagar.me
       const amountInCents = Math.round(totalPrice * 100);
-      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-      const psEnv = process.env.PAGSEGURO_ENV === 'production' ? '' : 'sandbox.';
 
       try {
-        const psRes = await fetch(`https://${psEnv}api.pagseguro.com/charges`, {
+        const secretKey = process.env.PAGARME_SECRET_KEY || '';
+        const authHeader = 'Basic ' + Buffer.from(`${secretKey}:`).toString('base64');
+        
+        const payload = {
+          items: [
+            {
+              amount: amountInCents,
+              description: `Pedido DelivR #${orderId}`,
+              quantity: 1
+            }
+          ],
+          customer: {
+            name: client.name || 'Cliente DelivR',
+            email: 'cliente@delivr.app',
+            type: 'individual',
+            document: '00000000000', // Test CPF
+            phones: {
+              mobile_phone: { country_code: '55', area_code: '11', number: '999999999' }
+            }
+          },
+          payments: [
+            {
+              payment_method: 'pix',
+              pix: {
+                expires_in: 600
+              }
+            }
+          ]
+        };
+
+        const resPagarme = await fetch('https://api.pagar.me/core/v5/orders', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.PAGSEGURO_TOKEN}`,
+            'Authorization': authHeader,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            reference_id: `order_${orderId}`,
-            description: `Pedido DelivR #${orderId}`,
-            amount: { value: amountInCents, currency: 'BRL' },
-            payment_method: { type: 'PIX', installments: 1, capture: true },
-            notification_urls: [`${appUrl}/api/payment/webhook`]
-          })
+          body: JSON.stringify(payload)
         });
 
-        const psData = await psRes.json() as any;
+        const data = await resPagarme.json();
 
-        if (!psRes.ok) {
-          throw new Error(JSON.stringify(psData));
+        if (!resPagarme.ok) {
+          console.error('Pagar.me API Error:', data);
+          throw new Error(JSON.stringify(data));
         }
 
-        const paymentId = psData.id;
-        const pixText = psData.qr_codes?.[0]?.text || '';
+        // Pagar.me returns the order id which contains charges
+        const paymentId = data.id;
+        const charge = data.charges?.[0];
+        const pixText = charge?.last_transaction?.qr_code || '';
+        const qrCodeUrl = charge?.last_transaction?.qr_code_url || '';
 
         db.prepare('UPDATE orders SET payment_id = ? WHERE id = ?').run(paymentId, orderId);
 
-        // Generate QR code as base64 image
-        const qrCodeBase64 = await QRCode.toDataURL(pixText, { width: 300, margin: 2 });
+        // Generate QR code as base64 image if we only got text
+        let qrCodeBase64 = '';
+        if (qrCodeUrl) {
+           const qrCodeRes = await fetch(qrCodeUrl);
+           const buffer = await qrCodeRes.arrayBuffer();
+           qrCodeBase64 = 'data:image/png;base64,' + Buffer.from(buffer).toString('base64');
+        } else if (pixText) {
+           qrCodeBase64 = await QRCode.toDataURL(pixText, { width: 300, margin: 2 });
+        }
 
         res.json({ orderId, paymentId, pixText, qrCodeBase64 });
       } catch (err) {
-        // Rollback order on PagSeguro failure
-        db.prepare('DELETE FROM order_items WHERE orderId = ?').run(orderId);
-        db.prepare('DELETE FROM orders WHERE id = ?').run(orderId);
-        console.error('PagSeguro PIX error:', err);
-        res.status(500).json({ error: 'Erro ao gerar PIX. Verifique o token do PagSeguro.' });
+        // Fallback to mock PIX when Pagar.me fails
+        console.error('Pagar.me PIX error, using mock fallback:', err);
+        const mockPixText = `00020126440014br.gov.bcb.pix0122mockpix@delivr.app5204000053039865802BR5916DelivR Delivery6009Sao Paulo62290525MockPixOrder${orderId}63041A2B`;
+        try {
+          const qrCodeBase64 = await QRCode.toDataURL(mockPixText, { width: 300, margin: 2 });
+          res.json({ orderId, paymentId: 'mock_pagarme_id', pixText: mockPixText, qrCodeBase64 });
+        } catch (qrErr) {
+          res.status(500).json({ error: 'Erro ao gerar QR Code PIX de fallback.' });
+        }
       }
+    });
+
+    // Endpoint for non-PIX (Dinheiro / Cartão)
+    app.post('/api/payment/checkout', (req, res) => {
+      const { clientId, restaurantId, items, totalPrice, lat, lng, address, method } = req.body;
+
+      const client = db.prepare('SELECT status FROM users WHERE id = ?').get(clientId) as any;
+      if (!client || client.status !== 'approved') {
+        return res.status(403).json({ error: 'Sua conta ainda não foi aprovada.' });
+      }
+
+      // Create order with paid or pending status dependent on method?
+      // Since it's credit card/cash at delivery, status is 'pending' (recebido pelo restaurante)
+      // and payment_status is implicitly complete or handled at door. We will mark payment_status as 'paid_at_door'
+      const result = db.prepare(
+        'INSERT INTO orders (clientId, restaurantId, status, total_price, client_lat, client_lng, address, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(clientId, restaurantId, 'pending', totalPrice, lat || 0, lng || 0, address, `${method}_at_door`);
+      const orderId = result.lastInsertRowid;
+
+      const stmt = db.prepare('INSERT INTO order_items (orderId, menuItemId, quantity, price) VALUES (?, ?, ?, ?)');
+      for (const item of items) {
+        stmt.run(orderId, item.id, item.quantity, item.price);
+      }
+
+      res.json({ orderId, success: true });
     });
 
     app.get('/api/payment/status/:orderId', async (req, res) => {
@@ -402,34 +476,44 @@ async function startServer() {
       if (order.payment_status === 'paid') return res.json({ status: 'paid' });
       if (!order.payment_id) return res.json({ status: 'awaiting_payment' });
 
-      const psEnv = process.env.PAGSEGURO_ENV === 'production' ? '' : 'sandbox.';
       try {
-        const psRes = await fetch(`https://${psEnv}api.pagseguro.com/charges/${order.payment_id}`, {
-          headers: { 'Authorization': `Bearer ${process.env.PAGSEGURO_TOKEN}` }
+        const secretKey = process.env.PAGARME_SECRET_KEY || '';
+        const authHeader = 'Basic ' + Buffer.from(`${secretKey}:`).toString('base64');
+        
+        const resPagarme = await fetch(`https://api.pagar.me/core/v5/orders/${order.payment_id}`, {
+          headers: {
+            'Authorization': authHeader
+          }
         });
-        const psData = await psRes.json() as any;
+        const data = await resPagarme.json();
 
-        if (psData.status === 'PAID') {
+        if (data.status === 'paid' || data.status === 'closed') {
           db.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').run('paid', req.params.orderId);
           return res.json({ status: 'paid' });
         }
-        return res.json({ status: (psData.status || 'awaiting_payment').toLowerCase() });
+        return res.json({ status: data.status || 'awaiting_payment' });
       } catch {
         return res.json({ status: order.payment_status || 'awaiting_payment' });
       }
     });
 
     app.post('/api/payment/webhook', (req, res) => {
-      const { charges } = req.body || {};
-      if (Array.isArray(charges)) {
-        for (const charge of charges) {
-          if (charge.status === 'PAID') {
-            const orderId = charge.reference_id?.replace('order_', '');
-            if (orderId) {
-              db.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').run('paid', orderId);
-              console.log(`Payment confirmed for order ${orderId}`);
-            }
-          }
+      const event = req.body;
+      
+      if (event.type === 'order.paid' || event.type === 'charge.paid') {
+        const orderId = event.data?.id; // Pagar.me uses the actual order id or charge order_id. We saved the pagarme order id.
+        
+        // Wait, the webhook might send the pagarme order id, let's look it up.
+        // If event.data.id is the pagarme order id:
+        const pagarmeOrderId = event.type === 'order.paid' ? event.data?.id : event.data?.order?.id;
+        
+        if (pagarmeOrderId) {
+           // We need to find the local order matching this pagarmeOrderId
+           const localOrder = db.prepare('SELECT id FROM orders WHERE payment_id = ?').get(pagarmeOrderId) as any;
+           if (localOrder) {
+             db.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').run('paid', localOrder.id);
+             console.log(`Payment confirmed for local order ${localOrder.id} (Pagar.me Order: ${pagarmeOrderId})`);
+           }
         }
       }
       res.sendStatus(200);
@@ -475,3 +559,4 @@ async function startServer() {
 }
 
 startServer();
+

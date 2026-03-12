@@ -160,6 +160,7 @@ interface UserData {
   name: string;
   id_document?: string;
   selfie?: string;
+  avatar?: string;
 }
 
 interface Restaurant {
@@ -281,7 +282,14 @@ export default function App() {
               <p className="text-sm font-medium">{user?.name}</p>
               <p className="text-xs text-black/50 capitalize">{user?.role}</p>
             </div>
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="rounded-full hover:bg-black/5">
+            {user?.avatar ? (
+              <img src={user.avatar} alt="Avatar" className="h-10 w-10 rounded-full object-cover shadow-sm bg-black/5 border border-black/10" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/5 text-sm font-bold text-black/40">
+                {user?.name?.charAt(0) || 'U'}
+              </div>
+            )}
+            <Button variant="ghost" size="icon" onClick={handleLogout} className="rounded-full hover:bg-black/5 ml-2">
               <LogOut size={18} />
             </Button>
           </div>
@@ -1048,6 +1056,33 @@ function DriverDashboard({ user }: { user: UserData }) {
     }
   };
 
+  const updateAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        try {
+          const res = await fetch(`/api/users/${user.id}/avatar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ avatar: base64 })
+          });
+          if (res.ok) {
+            const updatedUser = { ...user, avatar: base64 };
+            try { localStorage.setItem('user', JSON.stringify(updatedUser)); } catch {}
+            // To force update we can do a full reload, or we rely on the parent component state. 
+            // For now, reload window to update the nav bar safely with the new localStorage user
+            window.location.reload(); 
+          }
+        } catch (err) {
+          console.error('Failed to update avatar', err);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const fetchAvailable = async () => {
     const res = await fetch('/api/orders/driver/available');
     setAvailableOrders(await res.json());
@@ -1078,26 +1113,56 @@ function DriverDashboard({ user }: { user: UserData }) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-4xl mx-auto">
+      {/* Driver Profile Header */}
+      <Card className="flex flex-col md:flex-row items-center gap-6 p-8 border-none shadow-xl bg-gradient-to-br from-black to-slate-900 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-3xl rounded-full" />
+        <div className="relative group cursor-pointer z-10 w-24 h-24 shrink-0">
+          {user.avatar ? (
+             <img src={user.avatar} alt="Perfil" className="w-full h-full object-cover rounded-full border-4 border-emerald-500 shadow-xl" referrerPolicy="no-referrer" />
+          ) : (
+             <div className="w-full h-full flex items-center justify-center rounded-full border-4 border-dashed border-white/20 bg-white/5 text-white/50 group-hover:bg-white/10 group-hover:border-emerald-500 transition-all">
+                <User size={32} />
+             </div>
+          )}
+          <div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+             <span className="text-[10px] font-black uppercase text-white tracking-widest text-center px-2">Atualizar<br/>Foto</span>
+          </div>
+          <input type="file" accept="image/*" onChange={updateAvatar} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+        </div>
+        <div className="text-center md:text-left z-10">
+          <h2 className="text-3xl font-black tracking-tight">{user.name}</h2>
+          <p className="text-emerald-400 font-bold text-sm tracking-widest uppercase mb-2">Entregador Parceiro</p>
+          <div className="flex items-center justify-center md:justify-start gap-4 text-white/60 text-xs font-bold">
+            <span className="flex items-center gap-1 bg-white/10 px-3 py-1 rounded-full"><Star size={12} className="text-amber-400" /> 4.9</span>
+            <span className="flex items-center gap-1 bg-white/10 px-3 py-1 rounded-full"><Clock size={12} /> {stats?.count || 0} Corridas</span>
+          </div>
+        </div>
+      </Card>
+
       {isOnline && (
         <div className="flex gap-4">
           <Button onClick={() => setActiveTab('orders')} className={cn(activeTab !== 'orders' && "bg-transparent text-black hover:bg-black/5")}>
-            <MapPin size={18} className="mr-2" /> Entregas
+            <MapPin size={18} className="mr-2" /> Entregas Disponíveis
           </Button>
           <Button onClick={() => setActiveTab('stats')} className={cn(activeTab !== 'stats' && "bg-transparent text-black hover:bg-black/5")}>
-            <BarChart3 size={18} className="mr-2" /> Estatísticas
+            <BarChart3 size={18} className="mr-2" /> Meus Ganhos
           </Button>
         </div>
       )}
 
       {!isOnline ? (
-        <Card className="py-12 text-center">
-          <Truck size={48} className="mx-auto mb-4 text-black/10" />
-          <h3 className="mb-2 text-xl font-bold">Pronto para trabalhar?</h3>
-          <p className="mb-6 text-black/50">Ative sua localização para começar a receber pedidos.</p>
-          {locationError && <p className="mb-4 text-sm text-red-500">{locationError}</p>}
-          <Button onClick={goOnline} className="px-8">Ficar Online</Button>
-        </Card>
+        <div className="py-12 text-center">
+          <div className="w-32 h-32 mx-auto bg-black/5 rounded-full flex items-center justify-center mb-6 shadow-inner">
+            <Truck size={48} className="text-black/20" />
+          </div>
+          <h3 className="mb-2 text-3xl font-black tracking-tight">Pronto para começar?</h3>
+          <p className="mb-8 text-black/50 max-w-md mx-auto">Ative sua geolocalização para entrar online e receber novas solicitações de entrega em tempo real.</p>
+          {locationError && <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold flex items-center justify-center gap-2"><AlertCircle size={16}/> {locationError}</div>}
+          <Button onClick={goOnline} className="h-16 px-12 text-lg font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 hover:scale-[1.02] shadow-xl shadow-emerald-200 transition-all rounded-full">
+            Ficar Online Agora
+          </Button>
+        </div>
       ) : activeTab === 'stats' && stats ? (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="grid gap-4 md:grid-cols-2">
@@ -1211,6 +1276,7 @@ function ClientDashboard({ user }: { user: UserData }) {
   const [pixCountdown, setPixCountdown] = useState(600); // 10 minutes
   const [pixCopied, setPixCopied] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'dinheiro' | 'cartao'>('pix');
 
   useEffect(() => {
     fetchRestaurants();
@@ -1286,48 +1352,72 @@ function ClientDashboard({ user }: { user: UserData }) {
     setCheckoutLoading(true);
 
     const doRequest = async (lat: number, lng: number) => {
-      const res = await fetch('/api/payment/pix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: user.id,
-          restaurantId: selectedRestaurant!.id,
-          items: cart.map(i => ({ id: i.item.id, quantity: i.quantity, price: i.item.price })),
-          totalPrice, lat, lng, address
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setPixData({ orderId: data.orderId, pixText: data.pixText, qrCodeBase64: data.qrCodeBase64 });
-        setPixStatus('awaiting');
-        setPixCountdown(600);
-        setShowConfirm(false);
-        setCart([]);
-        setSelectedRestaurant(null);
-        setAddress('');
+      if (paymentMethod === 'pix') {
+        const res = await fetch('/api/payment/pix', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: user.id,
+            restaurantId: selectedRestaurant!.id,
+            items: cart.map(i => ({ id: i.item.id, quantity: i.quantity, price: i.item.price })),
+            totalPrice, lat, lng, address
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setPixData({ orderId: data.orderId, pixText: data.pixText, qrCodeBase64: data.qrCodeBase64 });
+          setPixStatus('awaiting');
+          setPixCountdown(600);
+          setShowConfirm(false);
+          setCart([]);
+          setSelectedRestaurant(null);
+          setAddress('');
 
-        const interval = setInterval(async () => {
-          try {
-            const r = await fetch(`/api/payment/status/${data.orderId}`);
-            const s = await r.json();
-            if (s.status === 'paid') {
-              setPixStatus('paid');
-              clearInterval(interval);
-              fetchOrders();
-            }
-          } catch {}
-        }, 3000);
+          const interval = setInterval(async () => {
+            try {
+              const r = await fetch(`/api/payment/status/${data.orderId}`);
+              const s = await r.json();
+              if (s.status === 'paid') {
+                setPixStatus('paid');
+                clearInterval(interval);
+                fetchOrders();
+              }
+            } catch {}
+          }, 3000);
 
-        const timer = setInterval(() => {
-          setPixCountdown(prev => {
-            if (prev <= 1) { clearInterval(timer); return 0; }
-            return prev - 1;
-          });
-        }, 1000);
+          const timer = setInterval(() => {
+            setPixCountdown(prev => {
+              if (prev <= 1) { clearInterval(timer); return 0; }
+              return prev - 1;
+            });
+          }, 1000);
+        } else {
+          alert(data.error || 'Erro ao gerar PIX');
+        }
+        setCheckoutLoading(false);
       } else {
-        alert(data.error || 'Erro ao gerar PIX');
+        const res = await fetch('/api/payment/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: user.id,
+            restaurantId: selectedRestaurant!.id,
+            items: cart.map(i => ({ id: i.item.id, quantity: i.quantity, price: i.item.price })),
+            totalPrice, lat, lng, address, method: paymentMethod
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert('Pedido realizado com sucesso!');
+          setCart([]);
+          setSelectedRestaurant(null);
+          setAddress('');
+          fetchOrders();
+        } else {
+          alert(data.error || 'Erro ao realizar pedido');
+        }
+        setCheckoutLoading(false);
       }
-      setCheckoutLoading(false);
     };
 
     if (navigator.geolocation) {
@@ -1377,7 +1467,7 @@ function ClientDashboard({ user }: { user: UserData }) {
               <h3 className="text-2xl font-black">
                 {pixStatus === 'paid' ? 'Pagamento Confirmado!' : 'Aguardando Pagamento'}
               </h3>
-              <p className="text-white/60">Delivr • PagSeguro PIX</p>
+              <p className="text-white/60">Delivr • Pagamento PIX</p>
             </div>
             
             <div className="p-8">
@@ -1631,14 +1721,25 @@ function ClientDashboard({ user }: { user: UserData }) {
                     </div>
 
                     <div className="space-y-6 border-t border-white/10 pt-8">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Endereço de Entrega</label>
-                        <input 
-                          placeholder="Digite o endereço..." 
-                          value={address} 
-                          onChange={e => setAddress(e.target.value)} 
-                          className="w-full rounded-xl border-none bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/20 focus:ring-2 focus:ring-emerald-500/50" 
-                        />
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Forma de Pagamento</label>
+                          <div className="flex gap-2">
+                            <button onClick={() => setPaymentMethod('pix')} className={cn("flex-1 rounded-xl py-3 text-sm font-bold transition-all", paymentMethod === 'pix' ? "bg-emerald-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20")}>PIX</button>
+                            <button onClick={() => setPaymentMethod('dinheiro')} className={cn("flex-1 rounded-xl py-3 text-sm font-bold transition-all", paymentMethod === 'dinheiro' ? "bg-emerald-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20")}>Dinheiro</button>
+                            <button onClick={() => setPaymentMethod('cartao')} className={cn("flex-1 rounded-xl py-3 text-sm font-bold transition-all", paymentMethod === 'cartao' ? "bg-emerald-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20")}>Cartão</button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 border-t border-white/10 pt-4">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Endereço de Entrega</label>
+                          <input 
+                            placeholder="Digite o endereço..." 
+                            value={address} 
+                            onChange={e => setAddress(e.target.value)} 
+                            className="w-full rounded-xl border-none bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/20 focus:ring-2 focus:ring-emerald-500/50" 
+                          />
+                        </div>
                       </div>
 
                       <div className="flex items-end justify-between">
@@ -1664,3 +1765,4 @@ function ClientDashboard({ user }: { user: UserData }) {
     </div>
   );
 }
+
