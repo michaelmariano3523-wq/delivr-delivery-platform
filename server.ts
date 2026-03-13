@@ -75,7 +75,7 @@ db.exec(`
 // Migration: Add missing columns if they don't exist
 const migrate = () => {
   const tables = {
-    users: { id_document: 'TEXT', selfie: 'TEXT', avatar: 'TEXT' },
+    users: { id_document: 'TEXT', selfie: 'TEXT', avatar: 'TEXT', phone: 'TEXT', cpf: 'TEXT' },
     orders: { client_lat: 'REAL', client_lng: 'REAL', address: 'TEXT', payment_id: 'TEXT', payment_status: 'TEXT' },
     restaurants: { lat: 'REAL', lng: 'REAL' }
   };
@@ -132,11 +132,11 @@ async function startServer() {
     });
 
     app.post('/api/register', (req, res) => {
-      const { username, password, name, role, id_document, selfie } = req.body;
+      const { username, password, name, role, id_document, selfie, phone, cpf } = req.body;
       try {
         const status = role === 'client' ? 'pending' : 'approved';
-        const result = db.prepare('INSERT INTO users (username, password, role, status, name, id_document, selfie) VALUES (?, ?, ?, ?, ?, ?, ?)')
-          .run(username, password, role, status, name, id_document || null, selfie || null);
+        const result = db.prepare('INSERT INTO users (username, password, role, status, name, id_document, selfie, phone, cpf) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .run(username, password, role, status, name, id_document || null, selfie || null, phone || null, cpf || null);
         res.json({ id: result.lastInsertRowid, status });
       } catch (e) {
         res.status(400).json({ error: 'Usuário já existe' });
@@ -347,7 +347,7 @@ async function startServer() {
     app.post('/api/payment/pix', async (req, res) => {
       const { clientId, restaurantId, items, totalPrice, lat, lng, address } = req.body;
 
-      const client = db.prepare('SELECT status FROM users WHERE id = ?').get(clientId) as any;
+      const client = db.prepare('SELECT name, phone, cpf, status FROM users WHERE id = ?').get(clientId) as any;
       if (!client || client.status !== 'approved') {
         return res.status(403).json({ error: 'Sua conta ainda não foi aprovada.' });
       }
@@ -382,9 +382,13 @@ async function startServer() {
             name: client.name || 'Cliente DelivR',
             email: 'cliente@delivr.app',
             type: 'individual',
-            document: '00000000000', // Test CPF
+            document: (client.cpf || '00000000000').replace(/\D/g, ''),
             phones: {
-              mobile_phone: { country_code: '55', area_code: '11', number: '999999999' }
+              mobile_phone: { 
+                country_code: '55', 
+                area_code: (client.phone || '11999999999').replace(/\D/g, '').substring(0, 2), 
+                number: (client.phone || '11999999999').replace(/\D/g, '').substring(2) 
+              }
             }
           },
           payments: [

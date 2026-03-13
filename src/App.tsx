@@ -161,6 +161,8 @@ interface UserData {
   id_document?: string;
   selfie?: string;
   avatar?: string;
+  phone?: string;
+  cpf?: string;
 }
 
 interface Restaurant {
@@ -378,6 +380,8 @@ function RegisterView({ onRegister, onGoToLogin }: { onRegister: () => void, onG
   const [role, setRole] = useState<Role>('client');
   const [idDoc, setIdDoc] = useState<string | null>(null);
   const [selfie, setSelfie] = useState<string | null>(null);
+  const [phone, setPhone] = useState('');
+  const [cpf, setCpf] = useState('');
   const [error, setError] = useState('');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -398,7 +402,7 @@ function RegisterView({ onRegister, onGoToLogin }: { onRegister: () => void, onG
     const res = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, name, role, id_document: idDoc, selfie })
+      body: JSON.stringify({ username, password, name, role, id_document: idDoc, selfie, phone, cpf })
     });
     const data = await res.json();
     if (res.ok) onRegister();
@@ -433,6 +437,30 @@ function RegisterView({ onRegister, onGoToLogin }: { onRegister: () => void, onG
                 className="w-full rounded-xl border border-black/10 px-4 py-2 focus:border-black focus:outline-none" 
                 required 
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium">CPF</label>
+                <input 
+                  type="text" 
+                  placeholder="000.000.000-00"
+                  value={cpf} 
+                  onChange={(e) => setCpf(e.target.value)}
+                  className="w-full rounded-xl border border-black/10 px-4 py-2 focus:border-black focus:outline-none" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Telefone</label>
+                <input 
+                  type="text" 
+                  placeholder="(00) 00000-0000"
+                  value={phone} 
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full rounded-xl border border-black/10 px-4 py-2 focus:border-black focus:outline-none" 
+                  required 
+                />
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Senha</label>
