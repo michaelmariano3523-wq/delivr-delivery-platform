@@ -1,5 +1,14 @@
 import 'dotenv/config';
 import fs from 'fs';
+
+console.log('--- SERVER INITIALIZING ---');
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION AT:', promise, 'REASON:', reason);
+});
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -36,6 +45,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Database initialization and seeding is now handled via migrations directly in Supabase
 
 async function startServer() {
+  console.log('Starting startServer() function...');
   try {
     const app = express();
     const server = createServer(app);
