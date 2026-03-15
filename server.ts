@@ -13,6 +13,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Initialize Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+console.log('--- Startup Configuration ---');
+console.log('SUPABASE_URL:', supabaseUrl ? 'Set' : 'MISSING');
+console.log('SUPABASE_KEY:', supabaseKey ? 'Set' : 'MISSING');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT || '3000 (default)');
+console.log('---------------------------');
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('CRITICAL ERROR: Supabase credentials are missing. The server may not function correctly.');
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Help with BigInt serialization if needed, though Supabase returns numbers for BIGINT usually
