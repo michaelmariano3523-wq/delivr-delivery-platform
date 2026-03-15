@@ -1,3 +1,4 @@
+console.log('>>> SERVER RAW START <<<');
 import 'dotenv/config';
 import fs from 'fs';
 
@@ -12,7 +13,7 @@ process.on('unhandledRejection', (reason, promise) => {
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { createServer as createViteServer } from 'vite';
+// vite removed from top-level to save memory in production
 import { createClient } from '@supabase/supabase-js';
 import QRCode from 'qrcode';
 import path from 'path';
@@ -740,6 +741,8 @@ async function startServer() {
 
     // Vite middleware
     if (process.env.NODE_ENV !== 'production') {
+      console.log('Loading Vite for development...');
+      const { createServer: createViteServer } = await import('vite');
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: 'spa',
