@@ -18,11 +18,15 @@ import {
   ClipboardList,
   Wallet,
   TrendingUp,
-  Trash2,
   ShoppingBag,
   Bike,
   Download,
-  AlertCircle
+  RefreshCw,
+  Trash2,
+  AlertCircle,
+  Edit2,
+  ShieldAlert,
+  Trash
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -45,17 +49,20 @@ function DeliveryMap({ driverLoc, restaurantLoc, clientLoc }: any) {
   const centerX = 150;
   const centerY = 150;
 
+  // Use the first available location as anchor for the map
+  const anchor = restaurantLoc || driverLoc || clientLoc;
+
   const getPos = (loc: any) => {
-    if (!loc || !restaurantLoc) return { x: centerX, y: centerY };
+    if (!loc || !anchor) return { x: centerX, y: centerY };
     return {
-      x: centerX + (loc.lng - restaurantLoc.lng) * scale,
-      y: centerY - (loc.lat - restaurantLoc.lat) * scale
+      x: centerX + (loc.lng - anchor.lng) * scale,
+      y: centerY - (loc.lat - anchor.lat) * scale
     };
   };
 
   const drv = getPos(driverLoc);
   const cli = getPos(clientLoc);
-  const res = { x: centerX, y: centerY };
+  const res = getPos(restaurantLoc);
 
   // Calculate distances
   const distToCli = driverLoc && clientLoc ? calculateDistance(driverLoc.lat, driverLoc.lng, clientLoc.lat, clientLoc.lng) : 0;
@@ -66,57 +73,71 @@ function DeliveryMap({ driverLoc, restaurantLoc, clientLoc }: any) {
       <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
       
       <svg className="absolute inset-0 h-full w-full">
-        <motion.path 
-          d={`M ${res.x} ${res.y} L ${cli.x} ${cli.y}`}
-          stroke="black" strokeWidth="2" strokeDasharray="4 4" opacity="0.1" fill="none"
-        />
+        {restaurantLoc && clientLoc && (
+          <motion.path 
+            d={`M ${res.x} ${res.y} L ${cli.x} ${cli.y}`}
+            stroke="black" strokeWidth="2" strokeDasharray="4 4" opacity="0.1" fill="none"
+          />
+        )}
       </svg>
 
       {/* Restaurant */}
-      <div className="absolute" style={{ left: res.x, top: res.y, transform: 'translate(-50%, -50%)' }}>
-        <div className="bg-black text-white p-2 rounded-xl shadow-lg ring-4 ring-white">
-          <Store size={14} />
+      {restaurantLoc && (
+        <div className="absolute" style={{ left: res.x, top: res.y, transform: 'translate(-50%, -50%)' }}>
+          <div className="bg-black text-white p-2 rounded-xl shadow-lg ring-4 ring-white">
+            <Store size={14} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Client */}
-      <div className="absolute" style={{ left: cli.x, top: cli.y, transform: 'translate(-50%, -50%)' }}>
-        <div className="bg-emerald-500 text-white p-2 rounded-xl shadow-lg ring-4 ring-white">
-          <User size={14} />
+      {clientLoc && (
+        <div className="absolute" style={{ left: cli.x, top: cli.y, transform: 'translate(-50%, -50%)' }}>
+          <div className="bg-emerald-500 text-white p-2 rounded-xl shadow-lg ring-4 ring-white">
+            <User size={14} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Driver (Motinha) */}
-      <motion.div 
-        animate={{ left: drv.x, top: drv.y }}
-        transition={{ type: 'spring', stiffness: 40, damping: 15 }}
-        className="absolute z-10" 
-        style={{ transform: 'translate(-50%, -50%)' }}
-      >
-        <div className="bg-amber-400 text-black p-3 rounded-full shadow-2xl ring-4 ring-white">
-          <Bike size={20} className="animate-pulse" />
-        </div>
-        <div className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full shadow-lg mt-2 border border-black/5 flex items-center gap-2">
-           <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-           <p className="text-[10px] font-black whitespace-nowrap">VOCÊ • {distToCli < 0.1 ? "CHEGANDO" : `${distToCli.toFixed(1)}km`}</p>
-        </div>
-      </motion.div>
+      {driverLoc && (
+        <motion.div 
+          animate={{ left: drv.x, top: drv.y }}
+          transition={{ type: 'spring', stiffness: 40, damping: 15 }}
+          className="absolute z-10" 
+          style={{ transform: 'translate(-50%, -50%)' }}
+        >
+          <div className="bg-amber-400 text-black p-3 rounded-full shadow-2xl ring-4 ring-white">
+            <Bike size={20} className="animate-pulse" />
+          </div>
+          <div className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full shadow-lg mt-2 border border-black/5 flex items-center gap-2">
+             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+             <p className="text-[10px] font-black whitespace-nowrap">
+               {distToCli > 0 ? (distToCli < 0.1 ? "CHEGANDO" : `${distToCli.toFixed(1)}km`) : "ENTREGADOR"}
+             </p>
+          </div>
+        </motion.div>
+      )}
 
       <div className="absolute bottom-4 left-4 right-4 flex gap-3">
-         <Card className="flex-1 bg-white/60 backdrop-blur-md p-3 border-none flex items-center justify-between">
-            <div>
-               <p className="text-[8px] font-black text-black/40 uppercase">Para Loja</p>
-               <p className="text-xs font-black">{distToRes.toFixed(2)} km</p>
-            </div>
-            <Store size={12} className="text-black/20" />
-         </Card>
-         <Card className="flex-1 bg-white/60 backdrop-blur-md p-3 border-none flex items-center justify-between">
-            <div>
-               <p className="text-[8px] font-black text-black/40 uppercase">Para Cliente</p>
-               <p className="text-xs font-black">{distToCli.toFixed(2)} km</p>
-            </div>
-            <User size={12} className="text-emerald-500/40" />
-         </Card>
+         {restaurantLoc && (
+           <Card className="flex-1 bg-white/60 backdrop-blur-md p-3 border-none flex items-center justify-between">
+              <div>
+                 <p className="text-[8px] font-black text-black/40 uppercase">Para Loja</p>
+                 <p className="text-xs font-black">{distToRes.toFixed(2)} km</p>
+              </div>
+              <Store size={12} className="text-black/20" />
+           </Card>
+         )}
+         {clientLoc && (
+           <Card className="flex-1 bg-white/60 backdrop-blur-md p-3 border-none flex items-center justify-between">
+              <div>
+                 <p className="text-[8px] font-black text-black/40 uppercase">Para Cliente</p>
+                 <p className="text-xs font-black">{distToCli.toFixed(2)} km</p>
+              </div>
+              <User size={12} className="text-emerald-500/40" />
+           </Card>
+         )}
       </div>
     </div>
   );
@@ -515,22 +536,50 @@ function RegisterView({ onRegister, onGoToLogin }: { onRegister: () => void, onG
 
 function AdminDashboard({ user }: { user: UserData }) {
   const [pendingClients, setPendingClients] = useState<UserData[]>([]);
+  const [allRestaurants, setAllRestaurants] = useState<any[]>([]);
+  const [allDrivers, setAllDrivers] = useState<any[]>([]);
   const [stats, setStats] = useState<{ restaurantStats: any[], driverStats: any[] } | null>(null);
-  const [activeTab, setActiveTab] = useState<'approvals' | 'stats' | 'register'>('approvals');
+  const [activeTab, setActiveTab] = useState<'approvals' | 'stats' | 'register' | 'restaurants' | 'drivers'>('approvals');
+  const [selectedProfile, setSelectedProfile] = useState<any | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchPending();
-    fetchStats();
-  }, []);
+    fetchData();
+  }, [activeTab]);
 
-  const fetchPending = async () => {
-    const res = await fetch('/api/admin/pending-clients');
-    setPendingClients(await res.json());
-  };
+  const fetchData = async () => {
+    setFetching(true);
+    setError(null);
+    try {
+      const urls = [
+        '/api/admin/pending-clients',
+        '/api/admin/restaurants',
+        '/api/admin/drivers',
+        '/api/admin/stats'
+      ];
+      
+      const responses = await Promise.all(urls.map(url => fetch(url)));
+      const results = await Promise.all(responses.map(async (r, i) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(`Erro ao carregar ${urls[i]}: ${body.error || r.statusText}`);
+        }
+        return r.json();
+      }));
 
-  const fetchStats = async () => {
-    const res = await fetch('/api/admin/stats');
-    setStats(await res.json());
+      const [pending, restaurants, drivers, statistics] = results;
+
+      setPendingClients(pending);
+      setAllRestaurants(restaurants);
+      setAllDrivers(drivers);
+      setStats(statistics);
+    } catch (err: any) {
+      console.error('Fetch error:', err);
+      setError(err.message);
+    } finally {
+      setFetching(false);
+    }
   };
 
   const approveClient = async (userId: number) => {
@@ -539,101 +588,430 @@ function AdminDashboard({ user }: { user: UserData }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId })
     });
-    fetchPending();
+    fetchData(); // Refresh everything
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap gap-4">
-        <Button 
-          onClick={() => setActiveTab('approvals')} 
-          className={cn(activeTab !== 'approvals' && "bg-transparent text-black hover:bg-black/5")}
-        >
-          <Users size={18} className="mr-2" />
-          Aprovações ({pendingClients.length})
-        </Button>
-        <Button 
-          onClick={() => setActiveTab('stats')} 
-          className={cn(activeTab !== 'stats' && "bg-transparent text-black hover:bg-black/5")}
-        >
-          <BarChart3 size={18} className="mr-2" />
-          Estatísticas
-        </Button>
-        <Button 
-          onClick={() => setActiveTab('register')} 
-          className={cn(activeTab !== 'register' && "bg-transparent text-black hover:bg-black/5")}
-        >
-          <Plus size={18} className="mr-2" />
-          Cadastrar Restaurante/Entregador
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex flex-wrap gap-3">
+          {[
+            { id: 'approvals', label: 'Aprovações', count: pendingClients.length, icon: <Users size={18} /> },
+            { id: 'restaurants', label: 'Restaurantes', count: allRestaurants.length, icon: <Store size={18} /> },
+            { id: 'drivers', label: 'Entregadores', count: allDrivers.length, icon: <Truck size={18} /> },
+            { id: 'stats', label: 'Estatísticas', icon: <BarChart3 size={18} /> },
+            { id: 'register', label: 'Novo Cadastro', icon: <Plus size={18} /> },
+          ].map(tab => (
+            <Button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)} 
+              className={cn("rounded-2xl px-6 py-6 transition-all", activeTab === tab.id ? "bg-black text-white shadow-xl scale-105" : "bg-white text-black/60 border border-black/5 hover:bg-black/5")}
+            >
+              <div className="flex items-center gap-2 font-black uppercase tracking-widest text-[10px]">
+                {tab.icon}
+                {tab.label}
+                {tab.count !== undefined && (
+                  <span className={cn("ml-1 px-2 py-0.5 rounded-full text-[8px]", activeTab === tab.id ? "bg-white/20" : "bg-black/5")}>
+                    {tab.count}
+                  </span>
+                )}
+              </div>
+            </Button>
+          ))}
+        </div>
+        
+        <Button size="icon" onClick={fetchData} disabled={fetching} className="rounded-2xl bg-white text-black border border-black/5 hover:bg-black/5 shadow-sm">
+          <RefreshCw size={18} className={cn(fetching && "animate-spin")} />
         </Button>
       </div>
 
-      {activeTab === 'approvals' && (
-        <div className="grid gap-6 md:grid-cols-2">
+      {error && (
+        <Card className="p-6 border-none bg-red-50 text-red-600 flex items-center gap-3">
+          <AlertCircle size={24} />
+          <div>
+            <p className="font-bold">Erro ao carregar dados</p>
+            <p className="text-sm opacity-80">{error}</p>
+          </div>
+        </Card>
+      )}
+
+      {fetching && (
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-black border-t-transparent" />
+        </div>
+      )}
+
+      {!fetching && activeTab === 'approvals' && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {pendingClients.map(client => (
-            <Card key={client.id} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-bold">{client.name}</p>
-                  <p className="text-sm text-black/50">@{client.username}</p>
+            <Card key={client.id} className="group relative overflow-hidden p-6 hover:shadow-2xl transition-all border-none shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-2xl bg-black flex items-center justify-center text-white">
+                    <User size={24} />
+                  </div>
+                  <div>
+                    <p className="font-bold">{client.name}</p>
+                    <p className="text-xs text-black/40">@{client.username}</p>
+                  </div>
                 </div>
-                <Button size="sm" onClick={() => approveClient(client.id)} className="rounded-full bg-emerald-500 hover:bg-emerald-600">
-                  <Check size={16} />
+                <Button size="icon" onClick={() => approveClient(client.id)} className="rounded-2xl bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-200">
+                  <Check size={18} />
                 </Button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-bold uppercase text-black/40">Documento</p>
-                  <img src={client.id_document} alt="ID" className="h-24 w-full rounded-lg object-cover border border-black/5" referrerPolicy="no-referrer" />
+              <div className="grid grid-cols-2 gap-3">
+                <img src={client.id_document} className="h-24 w-full rounded-xl object-cover border border-black/5" />
+                <img src={client.selfie} className="h-24 w-full rounded-xl object-cover border border-black/5" />
+              </div>
+            </Card>
+          ))}
+          {pendingClients.length === 0 && <p className="col-span-full py-20 text-center text-black/30 font-bold">Nenhuma aprovação pendente.</p>}
+        </div>
+      )}
+
+      {!fetching && activeTab === 'restaurants' && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {allRestaurants.map(restaurant => (
+            <Card key={restaurant.id} className="p-6 hover:shadow-xl transition-all border-none shadow-sm cursor-pointer group" onClick={() => setSelectedProfile(restaurant)}>
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 rounded-2xl bg-black/5 flex items-center justify-center group-hover:bg-black group-hover:text-white transition-colors">
+                  <Store size={32} />
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-bold uppercase text-black/40">Selfie</p>
-                  <img src={client.selfie} alt="Selfie" className="h-24 w-full rounded-lg object-cover border border-black/5" referrerPolicy="no-referrer" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-lg truncate tracking-tight">{restaurant.name}</p>
+                  <p className="text-xs text-black/40 font-bold uppercase">{restaurant.category}</p>
+                  <div className="flex items-center gap-1 mt-1 text-emerald-600">
+                    <MapPin size={10} />
+                    <p className="text-[10px] font-black uppercase truncate">{restaurant.address}</p>
+                  </div>
                 </div>
               </div>
             </Card>
           ))}
-          {pendingClients.length === 0 && <p className="col-span-full py-8 text-center text-black/50">Nenhuma aprovação pendente.</p>}
+          {allRestaurants.length === 0 && <p className="col-span-full py-20 text-center text-black/30 font-bold">Nenhum restaurante cadastrado.</p>}
         </div>
       )}
 
-      {activeTab === 'stats' && stats && (
+      {!fetching && activeTab === 'drivers' && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {allDrivers.map(driver => (
+            <Card key={driver.id} className="p-6 hover:shadow-xl transition-all border-none shadow-sm cursor-pointer group" onClick={() => setSelectedProfile(driver)}>
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 rounded-2xl bg-black/5 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                  <Truck size={32} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-lg truncate tracking-tight">{driver.name}</p>
+                  <p className="text-xs text-black/40 font-bold uppercase">@{driver.username}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest", 
+                      driver.status === 'approved' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+                      {driver.status === 'approved' ? 'Ativo' : 'Pendente'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+          {allDrivers.length === 0 && <p className="col-span-full py-20 text-center text-black/30 font-bold">Nenhum entregador cadastrado.</p>}
+        </div>
+      )}
+
+      {!fetching && activeTab === 'stats' && stats && (
         <div className="grid gap-8 md:grid-cols-2">
-          <Card>
-            <h3 className="mb-4 flex items-center gap-2 font-bold">
-              <Store size={18} /> Ganhos por Restaurante
+          <Card className="border-none shadow-sm h-fit">
+            <h3 className="mb-6 flex items-center gap-3 text-xl font-black tracking-tight">
+              <div className="h-8 w-8 rounded-xl bg-black text-white flex items-center justify-center">
+                <Store size={18} />
+              </div> 
+              Ganhos por Restaurante
             </h3>
             <div className="space-y-4">
               {stats.restaurantStats.map((s, i) => (
-                <div key={i} className="flex items-center justify-between border-b border-black/5 pb-2">
-                  <span>{s.name}</span>
-                  <span className="font-mono font-bold">R$ {s.total_earnings.toFixed(2)}</span>
+                <div 
+                  key={i} 
+                  className="flex items-center justify-between group cursor-pointer hover:bg-black/5 p-2 rounded-xl transition-all"
+                  onClick={() => {
+                    const r = allRestaurants.find(res => res.id === s.id);
+                    if (r) setSelectedProfile(r);
+                  }}
+                >
+                  <span className="font-bold text-black/60 group-hover:text-black transition-colors">{s.name}</span>
+                  <div className="h-px flex-1 mx-4 bg-black/5" />
+                  <span className="font-mono font-black text-emerald-600">R$ {s.total_earnings.toFixed(2)}</span>
                 </div>
               ))}
+              {stats.restaurantStats.length === 0 && <p className="text-center py-4 text-black/30 text-sm">Nenhum dado financeiro disponível.</p>}
             </div>
           </Card>
-          <Card>
-            <h3 className="mb-4 flex items-center gap-2 font-bold">
-              <Truck size={18} /> Entregas por Entregador
+          <Card className="border-none shadow-sm h-fit">
+            <h3 className="mb-6 flex items-center gap-3 text-xl font-black tracking-tight">
+              <div className="h-8 w-8 rounded-xl bg-black text-white flex items-center justify-center">
+                <Truck size={18} />
+              </div>
+              Entregas por Entregador
             </h3>
             <div className="space-y-4">
               {stats.driverStats.map((s, i) => (
-                <div key={i} className="flex items-center justify-between border-b border-black/5 pb-2">
-                  <span>{s.name}</span>
-                  <span className="font-bold">{s.total_deliveries} entregas</span>
+                <div 
+                  key={i} 
+                  className="flex items-center justify-between group cursor-pointer hover:bg-black/5 p-2 rounded-xl transition-all"
+                  onClick={() => {
+                    const d = allDrivers.find(drv => drv.id === s.id);
+                    if (d) setSelectedProfile(d);
+                  }}
+                >
+                  <span className="font-bold text-black/60 group-hover:text-black transition-colors">{s.name}</span>
+                  <div className="h-px flex-1 mx-4 bg-black/5" />
+                  <span className="font-black bg-black text-white px-3 py-1 rounded-lg text-[10px]">{s.total_deliveries} entregas</span>
                 </div>
               ))}
+              {stats.driverStats.length === 0 && <p className="text-center py-4 text-black/30 text-sm">Nenhum dado de entrega disponível.</p>}
             </div>
           </Card>
         </div>
       )}
 
-      {activeTab === 'register' && <AdminRegisterForm />}
+      {!fetching && activeTab === 'register' && <AdminRegisterForm onRegisterSuccess={fetchData} />}
+
+      {selectedProfile && (
+        <ProfileModal 
+          data={selectedProfile} 
+          onClose={() => setSelectedProfile(null)} 
+          onUpdate={fetchData}
+        />
+      )}
     </div>
   );
 }
 
-function AdminRegisterForm() {
+function ProfileModal({ data, onClose, onUpdate }: { data: any, onClose: () => void, onUpdate: () => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [editData, setEditData] = useState({ ...data });
+
+  const handleUpdate = async () => {
+    setLoading(true);
+    try {
+      const type = data.userId ? 'restaurants' : 'drivers';
+      const id = data.id;
+      const res = await fetch(`/api/admin/${type}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editData)
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar');
+      setIsEditing(false);
+      onUpdate();
+      onClose();
+    } catch (e) {
+      alert('Erro ao atualizar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Tem certeza que deseja excluir este cadastro permanentemente?')) return;
+    setLoading(true);
+    try {
+      const type = data.userId ? 'restaurants' : 'drivers';
+      const res = await fetch(`/api/admin/${type}/${data.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Falha ao excluir');
+      onUpdate();
+      onClose();
+    } catch (e) {
+      alert('Erro ao excluir');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!confirm('Deseja suspender este cadastro e enviá-lo de volta para aprovação pendente?')) return;
+    setLoading(true);
+    try {
+      const type = data.userId ? 'restaurants' : 'drivers';
+      const res = await fetch(`/api/admin/${type}/${data.id}/reject`, { method: 'POST' });
+      if (!res.ok) throw new Error('Falha ao rejeitar');
+      onUpdate();
+      onClose();
+    } catch (e) {
+      alert('Erro ao rejeitar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-lg overflow-y-auto max-h-[90vh]">
+        <Card className="p-8 relative overflow-hidden border-none shadow-2xl">
+          <Button variant="ghost" size="icon" onClick={onClose} className="absolute right-4 top-4 rounded-full z-10">
+            <X size={20} />
+          </Button>
+          
+          <div className="flex items-center gap-6 mb-8">
+            <div className="h-24 w-24 rounded-[2rem] bg-black flex items-center justify-center overflow-hidden shadow-2xl shrink-0">
+              {data.avatar || data.ownerAvatar ? (
+                <img src={data.avatar || data.ownerAvatar} className="h-full w-full object-cover" />
+              ) : (
+                <User size={40} className="text-white" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              {isEditing ? (
+                <input 
+                  className="text-2xl font-black tracking-tighter w-full bg-black/5 rounded-lg px-2 py-1 outline-none"
+                  value={editData.name}
+                  onChange={e => setEditData({...editData, name: e.target.value})}
+                />
+              ) : (
+                <h2 className="text-2xl font-black tracking-tighter truncate mb-1">{data.name}</h2>
+              )}
+              <p className="text-black/50 font-bold uppercase tracking-widest text-[10px]">@{data.username || data.ownerUsername}</p>
+              
+              {!isEditing && (
+                <div className="mt-4 flex gap-2">
+                  <span className={cn("px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest", 
+                    data.status === 'approved' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+                    {data.status === 'approved' ? 'Ativa' : 'Pendente'}
+                  </span>
+                  {data.delivery_type && (
+                    <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-black text-white">
+                      {data.delivery_type === 'own' ? 'Própria' : 'App'}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-6 rounded-3xl bg-black/[0.03] border border-black/5">
+                <p className="text-[10px] font-black uppercase text-black/30 mb-2 tracking-widest">WhatsApp</p>
+                {isEditing ? (
+                  <input 
+                    className="font-black text-sm w-full bg-transparent border-none outline-none"
+                    value={editData.phone}
+                    onChange={e => setEditData({...editData, phone: e.target.value})}
+                  />
+                ) : (
+                  <p className="font-black text-sm">{data.phone || '(n/a)'}</p>
+                )}
+              </div>
+              <div className="p-6 rounded-3xl bg-black/[0.03] border border-black/5">
+                <p className="text-[10px] font-black uppercase text-black/30 mb-2 tracking-widest">Documento CPF</p>
+                {isEditing ? (
+                  <input 
+                    className="font-black text-sm w-full bg-transparent border-none outline-none"
+                    value={editData.cpf}
+                    onChange={e => setEditData({...editData, cpf: e.target.value})}
+                  />
+                ) : (
+                  <p className="font-black text-sm">{data.cpf || '(n/a)'}</p>
+                )}
+              </div>
+            </div>
+
+            {(data.address || isEditing) && (
+              <div className="p-6 rounded-3xl bg-black/[0.03] border border-black/5">
+                <p className="text-[10px] font-black uppercase text-black/30 mb-2 tracking-widest">Endereço / Localização</p>
+                {isEditing ? (
+                  <input 
+                    className="font-black text-sm w-full bg-transparent border-none outline-none"
+                    value={editData.address}
+                    onChange={e => setEditData({...editData, address: e.target.value})}
+                  />
+                ) : (
+                  <p className="font-black text-sm">{data.address || '(n/a)'}</p>
+                )}
+              </div>
+            )}
+
+            {isEditing && data.userId && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-6 rounded-3xl bg-black/[0.03] border border-black/5">
+                  <p className="text-[10px] font-black uppercase text-black/30 mb-2 tracking-widest">Categoria</p>
+                  <input 
+                    className="font-black text-sm w-full bg-transparent border-none outline-none"
+                    value={editData.category}
+                    onChange={e => setEditData({...editData, category: e.target.value})}
+                  />
+                </div>
+                <div className="p-6 rounded-3xl bg-black/[0.03] border border-black/5">
+                  <p className="text-[10px] font-black uppercase text-black/30 mb-2 tracking-widest">Tipo Entrega</p>
+                  <select 
+                    className="font-black text-sm w-full bg-transparent border-none outline-none appearance-none cursor-pointer"
+                    value={editData.delivery_type}
+                    onChange={e => setEditData({...editData, delivery_type: e.target.value})}
+                  >
+                    <option value="platform">Plataforma</option>
+                    <option value="own">Própria</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {isEditing && data.userId && (
+              <div className="p-6 rounded-3xl bg-black/[0.03] border border-black/5">
+                <p className="text-[10px] font-black uppercase text-black/30 mb-2 tracking-widest">Proprietário</p>
+                <input 
+                  className="font-black text-sm w-full bg-transparent border-none outline-none"
+                  value={editData.ownerName}
+                  onChange={e => setEditData({...editData, ownerName: e.target.value})}
+                />
+              </div>
+            )}
+
+            {!isEditing && (data.id_document || data.selfie) && (
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-black/30 mb-3 tracking-widest">Foto do Doc</p>
+                  <img src={data.id_document} className="h-40 w-full rounded-3xl object-cover border border-black/5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase text-black/30 mb-3 tracking-widest">Selfie Verif.</p>
+                  <img src={data.selfie} className="h-40 w-full rounded-3xl object-cover border border-black/5" />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-6">
+              {isEditing ? (
+                <>
+                  <Button disabled={loading} onClick={handleUpdate} className="flex-1 rounded-2xl bg-black py-6">
+                    {loading ? 'Salvando...' : 'Salvar Alterações'}
+                  </Button>
+                  <Button disabled={loading} variant="outline" onClick={() => setIsEditing(false)} className="px-6 rounded-2xl py-6 border-black/10">
+                    Cancelar
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button onClick={() => setIsEditing(true)} className="flex-1 rounded-2xl bg-black py-6 text-xs font-black uppercase tracking-widest">
+                    <Edit2 size={16} className="mr-2" /> Editar
+                  </Button>
+                  {data.status === 'approved' && (
+                    <Button onClick={handleReject} variant="outline" className="rounded-2xl py-6 aspect-square border-black/10 hover:bg-amber-50 hover:text-amber-600">
+                      <ShieldAlert size={18} />
+                    </Button>
+                  )}
+                  <Button onClick={handleDelete} variant="outline" className="rounded-2xl py-6 aspect-square border-black/10 hover:bg-red-50 hover:text-red-600">
+                    <Trash2 size={18} />
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}
+
+function AdminRegisterForm({ onRegisterSuccess }: { onRegisterSuccess: () => void }) {
   const [type, setType] = useState<'restaurant' | 'driver'>('restaurant');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -641,62 +1019,103 @@ function AdminRegisterForm() {
   const [address, setAddress] = useState('');
   const [category, setCategory] = useState('');
   const [msg, setMsg] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, name, role: type })
-    });
-    const userData = await res.json();
-    
-    if (res.ok && type === 'restaurant') {
-      await fetch('/api/restaurants', {
+    setLoading(true);
+    setMsg('');
+    try {
+      const res = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: userData.id, name, address, category })
+        body: JSON.stringify({ username, password, name, role: type })
       });
+      const userData = await res.json();
+      
+      if (!res.ok) throw new Error(userData.error || 'Erro no cadastro de usuário');
+
+      if (type === 'restaurant') {
+        const resRes = await fetch('/api/restaurants', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: userData.id, name, address, category })
+        });
+        const resData = await resRes.json();
+        if (!resRes.ok) throw new Error(resData.error || 'Erro ao criar perfil do restaurante');
+      }
+
+      setMsg('✅ Cadastrado com sucesso!');
+      setName(''); setUsername(''); setPassword(''); setAddress(''); setCategory('');
+      onRegisterSuccess(); // Trigger re-fetch in parent
+    } catch (err: any) {
+      setMsg(`❌ Erro: ${err.message}`);
+      console.error(err);
+    } finally {
+      setLoading(false);
+      setTimeout(() => setMsg(m => m.startsWith('✅') ? '' : m), 5000);
     }
-    setMsg('Cadastrado com sucesso!');
-    setName(''); setUsername(''); setPassword(''); setAddress(''); setCategory('');
   };
 
   return (
-    <Card className="max-w-2xl">
-      <h3 className="mb-6 text-xl font-bold">Novo Cadastro</h3>
-      <div className="mb-6 flex gap-4">
-        <Button onClick={() => setType('restaurant')} className={cn(type !== 'restaurant' && "bg-transparent text-black hover:bg-black/5")}>Restaurante</Button>
-        <Button onClick={() => setType('driver')} className={cn(type !== 'driver' && "bg-transparent text-black hover:bg-black/5")}>Entregador</Button>
+    <Card className="max-w-2xl mx-auto border-none shadow-sm p-10">
+      <div className="text-center mb-10">
+        <h3 className="text-3xl font-black tracking-tighter mb-2">Novo Cadastro</h3>
+        <p className="text-black/40 text-sm font-medium">Adicione parceiros manualmente ao sistema</p>
       </div>
-      <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
-        <div className="md:col-span-2">
-          <label className="mb-1 block text-sm font-medium">Nome</label>
-          <input value={name} onChange={e => setName(e.target.value)} className="w-full rounded-xl border border-black/10 px-4 py-2" required />
+
+      <div className="mb-10 flex p-1.5 bg-black/5 rounded-2xl">
+        <button 
+          onClick={() => setType('restaurant')} 
+          className={cn("flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all", type === 'restaurant' ? "bg-white text-black shadow-sm" : "text-black/40 hover:text-black/60")}
+        >
+          Restaurante
+        </button>
+        <button 
+          onClick={() => setType('driver')} 
+          className={cn("flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all", type === 'driver' ? "bg-white text-black shadow-sm" : "text-black/40 hover:text-black/60")}
+        >
+          Entregador
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-black/40">Nome Completo / Fantasia</label>
+            <input value={name} onChange={e => setName(e.target.value)} className="w-full rounded-2xl border-none bg-black/5 px-6 py-4 font-bold focus:ring-2 focus:ring-black" required />
+          </div>
+          <div>
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-black/40">Usuário (Login)</label>
+            <input value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border-none bg-black/5 px-6 py-4 font-bold focus:ring-2 focus:ring-black" required />
+          </div>
+          <div>
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-black/40">Senha Inicial</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border-none bg-black/5 px-6 py-4 font-bold focus:ring-2 focus:ring-black" required />
+          </div>
+          {type === 'restaurant' && (
+            <>
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-black/40">Endereço</label>
+                <input value={address} onChange={e => setAddress(e.target.value)} className="w-full rounded-2xl border-none bg-black/5 px-6 py-4 font-bold focus:ring-2 focus:ring-black" required />
+              </div>
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-black/40">Categoria (ex: Pizza)</label>
+                <input value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-2xl border-none bg-black/5 px-6 py-4 font-bold focus:ring-2 focus:ring-black" required />
+              </div>
+            </>
+          )}
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">Usuário</label>
-          <input value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-xl border border-black/10 px-4 py-2" required />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">Senha</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-xl border border-black/10 px-4 py-2" required />
-        </div>
-        {type === 'restaurant' && (
-          <>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Endereço</label>
-              <input value={address} onChange={e => setAddress(e.target.value)} className="w-full rounded-xl border border-black/10 px-4 py-2" required />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Categoria</label>
-              <input value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-xl border border-black/10 px-4 py-2" required />
-            </div>
-          </>
-        )}
-        <div className="md:col-span-2">
-          <Button type="submit" className="w-full">Cadastrar {type === 'restaurant' ? 'Restaurante' : 'Entregador'}</Button>
-          {msg && <p className="mt-2 text-center text-emerald-500">{msg}</p>}
+        
+        <div className="pt-4">
+          <Button type="submit" disabled={loading} className="w-full py-8 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-black/10">
+            {loading ? 'Cadastrando...' : `Confirmar Cadastro de ${type === 'restaurant' ? 'Restaurante' : 'Entregador'}`}
+          </Button>
+          {msg && (
+            <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 text-center text-emerald-500 font-bold">
+              {msg}
+            </motion.p>
+          )}
         </div>
       </form>
     </Card>
@@ -762,6 +1181,9 @@ function RestaurantDashboard({ user }: { user: UserData }) {
         <Button onClick={() => setActiveTab('finance')} className={cn(activeTab !== 'finance' && "bg-transparent text-black hover:bg-black/5")}>
           <Wallet size={18} className="mr-2" /> Finanças
         </Button>
+        <Button onClick={() => setActiveTab('settings')} className={cn(activeTab !== 'settings' && "bg-transparent text-black hover:bg-black/5")}>
+          <Settings size={18} className="mr-2" /> Configurações
+        </Button>
       </div>
 
       {!fetching && !restaurant && (
@@ -776,18 +1198,29 @@ function RestaurantDashboard({ user }: { user: UserData }) {
                 <p className="font-bold">Pedido #{order.id}</p>
                 <p className="text-sm text-black/50">Cliente: {order.clientName}</p>
                 <p className="text-sm font-mono">R$ {order.total_price.toFixed(2)}</p>
-                <span className={cn(
-                  "mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium",
-                  order.status === 'pending' ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-                )}>
-                  {order.status}
-                </span>
+                <div className="mt-2 flex gap-2">
+                  <span className={cn(
+                    "inline-block rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-widest",
+                    order.status === 'pending' ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                  )}>
+                    {order.status}
+                  </span>
+                  {restaurant.delivery_type === 'own' && (
+                    <span className="inline-block rounded-full px-2 py-0.5 text-[10px] bg-black text-white font-black uppercase tracking-widest">Entrega Própria</span>
+                  )}
+                </div>
               </div>
               <div className="flex gap-2">
                 {order.status === 'pending' && (
                   <Button size="sm" onClick={() => updateOrderStatus(order.id, 'preparing')}>Preparar</Button>
                 )}
-                {order.status === 'preparing' && (
+                {order.status === 'preparing' && restaurant.delivery_type === 'own' && (
+                  <Button size="sm" onClick={() => updateOrderStatus(order.id, 'out_for_delivery')} className="bg-emerald-600">Sair para Entrega</Button>
+                )}
+                {order.status === 'out_for_delivery' && restaurant.delivery_type === 'own' && (
+                  <Button size="sm" onClick={() => updateOrderStatus(order.id, 'delivered')} className="bg-black">Marcar Entregue</Button>
+                )}
+                {order.status === 'preparing' && restaurant.delivery_type === 'platform' && (
                   <p className="text-sm text-black/50 italic">Aguardando entregador...</p>
                 )}
               </div>
@@ -873,6 +1306,55 @@ function RestaurantDashboard({ user }: { user: UserData }) {
           </div>
         </div>
       )}
+
+      {!fetching && restaurant && activeTab === 'settings' && (
+        <Card className="max-w-2xl mx-auto p-8">
+           <h3 className="text-2xl font-black mb-6">Configurações de Entrega</h3>
+           <div className="space-y-6">
+              <div className="flex flex-col gap-4">
+                 <button 
+                  onClick={async () => {
+                    await fetch(`/api/restaurants/${restaurant.id}/settings`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ delivery_type: 'platform' })
+                    });
+                    fetchData();
+                  }}
+                  className={cn("flex items-center gap-4 p-6 rounded-2xl border-2 transition-all text-left", restaurant.delivery_type === 'platform' ? "border-emerald-500 bg-emerald-50" : "border-black/5 hover:border-black/20")}
+                 >
+                    <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", restaurant.delivery_type === 'platform' ? "bg-emerald-600 text-white" : "bg-black/5 text-black/40")}>
+                       <Truck size={24} />
+                    </div>
+                    <div>
+                        <p className="font-bold">Entregadores da DashApp</p>
+                        <p className="text-xs text-black/50">Usa os entregadores parceiros da nossa rede (Repasse Automático).</p>
+                    </div>
+                 </button>
+
+                 <button 
+                   onClick={async () => {
+                    await fetch(`/api/restaurants/${restaurant.id}/settings`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ delivery_type: 'own' })
+                    });
+                    fetchData();
+                  }}
+                  className={cn("flex items-center gap-4 p-6 rounded-2xl border-2 transition-all text-left", restaurant.delivery_type === 'own' ? "border-emerald-500 bg-emerald-50" : "border-black/5 hover:border-black/20")}
+                 >
+                    <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", restaurant.delivery_type === 'own' ? "bg-emerald-600 text-white" : "bg-black/5 text-black/40")}>
+                       <Users size={24} />
+                    </div>
+                    <div>
+                        <p className="font-bold">Entrega Própria</p>
+                        <p className="text-xs text-black/50">Você gerencia seus próprios entregadores.</p>
+                    </div>
+                 </button>
+              </div>
+           </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -881,6 +1363,7 @@ function RestaurantSetupForm({ userId, onComplete }: { userId: number, onComplet
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [category, setCategory] = useState('');
+  const [deliveryType, setDeliveryType] = useState('platform');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -890,7 +1373,7 @@ function RestaurantSetupForm({ userId, onComplete }: { userId: number, onComplet
       const res = await fetch('/api/restaurants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, name, address, category })
+        body: JSON.stringify({ userId, name, address, category, delivery_type: deliveryType })
       });
       if (res.ok) {
         onComplete();
@@ -923,6 +1406,26 @@ function RestaurantSetupForm({ userId, onComplete }: { userId: number, onComplet
         <div className="space-y-1">
           <label className="text-[10px] font-black uppercase text-black/30 ml-2">Categoria</label>
           <input placeholder="Ex: 🍔 Burger, 🍕 Pizza" value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-2xl border-none bg-white p-4 text-sm shadow-sm focus:ring-2 focus:ring-emerald-500" required />
+        </div>
+
+        <div className="space-y-1 pt-2">
+           <label className="text-[10px] font-black uppercase text-black/30 ml-2">Logística de Entrega</label>
+           <div className="flex gap-2">
+              <button 
+                type="button"
+                onClick={() => setDeliveryType('platform')}
+                className={cn("flex-1 rounded-2xl p-4 text-sm font-bold border-2 transition-all", deliveryType === 'platform' ? "border-emerald-500 bg-white" : "border-transparent bg-white/50 opacity-60")}
+              >
+                🚴 Plataforma
+              </button>
+              <button 
+                type="button"
+                onClick={() => setDeliveryType('own')}
+                className={cn("flex-1 rounded-2xl p-4 text-sm font-bold border-2 transition-all", deliveryType === 'own' ? "border-emerald-500 bg-white" : "border-transparent bg-white/50 opacity-60")}
+              >
+                🏠 Própria
+              </button>
+           </div>
         </div>
         <Button type="submit" disabled={loading} className="h-14 w-full bg-emerald-600 text-white hover:bg-emerald-500 font-black uppercase tracking-widest transition-all">
           {loading ? "Criando Perfil..." : "Começar Agora"}
@@ -1006,6 +1509,27 @@ function DriverDashboard({ user }: { user: UserData }) {
   const [stats, setStats] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'orders' | 'stats'>('orders');
   const socketRef = useRef<WebSocket | null>(null);
+  // Ref so watchPosition closure always has the latest orderId
+  const activeOrderRef = useRef<Order | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    activeOrderRef.current = activeOrder;
+  }, [activeOrder]);
+
+  // Setup WebSocket with auto-reconnect
+  const connectWS = () => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    socketRef.current = ws;
+    ws.onclose = () => {
+      // Reconnect after 3s if we're still supposed to be online
+      setTimeout(() => { if (activeOrderRef.current || isOnlineRef.current) connectWS(); }, 3000);
+    };
+    return ws;
+  };
+  const isOnlineRef = useRef(false);
 
   // Restore active order and online status after page refresh
   useEffect(() => {
@@ -1018,6 +1542,8 @@ function DriverDashboard({ user }: { user: UserData }) {
         const order = await resOrder.json();
         if (order && order.id) {
           setActiveOrder(order);
+          activeOrderRef.current = order;
+          isOnlineRef.current = true;
           setIsOnline(true);
         }
         setStats(await resStats.json());
@@ -1026,47 +1552,49 @@ function DriverDashboard({ user }: { user: UserData }) {
       }
     };
     restoreActiveOrder();
+    // Setup WebSocket on mount
+    connectWS();
+    return () => {
+      socketRef.current?.close();
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    };
   }, [user.id]);
 
   useEffect(() => {
+    isOnlineRef.current = isOnline;
     if (isOnline) {
       fetchAvailable();
       const interval = setInterval(fetchAvailable, 5000);
-      
-      // Start tracking
-      let watchId: number;
+
+      // Start GPS tracking — uses ref so orderId is always fresh
       if (navigator.geolocation) {
-        watchId = navigator.geolocation.watchPosition((pos) => {
+        if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = navigator.geolocation.watchPosition((pos) => {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setDriverLoc(loc);
-          if (socketRef.current?.readyState === WebSocket.OPEN) {
-            socketRef.current.send(JSON.stringify({
+          const ws = socketRef.current;
+          if (ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
               type: 'update_location',
               driverId: user.id,
-              orderId: activeOrder?.id,
+              orderId: activeOrderRef.current?.id,  // always fresh via ref
               ...loc
             }));
           }
-        });
+        }, (err) => {
+          console.error('Geolocation error:', err);
+        }, { enableHighAccuracy: true, maximumAge: 5000 });
       }
 
       return () => {
         clearInterval(interval);
-        if (watchId) navigator.geolocation.clearWatch(watchId);
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
       };
     }
-  }, [isOnline, activeOrder?.id]);
-
-  useEffect(() => {
-    // Setup WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
-    socketRef.current = ws;
-
-    return () => {
-      ws.close();
-    };
-  }, []);
+  }, [isOnline]);
 
   const goOnline = () => {
     if (navigator.geolocation) {
@@ -1276,7 +1804,8 @@ function DriverDashboard({ user }: { user: UserData }) {
                 <p className="font-bold">{order.restaurantName}</p>
                 <p className="text-sm text-black/50">De: {order.restaurantAddress}</p>
                 <p className="text-sm text-black/50">Para: {order.address}</p>
-                <p className="mt-1 font-mono text-sm">R$ {order.total_price.toFixed(2)}</p>
+                <p className="mt-1 font-mono text-sm text-emerald-600 font-bold">Ganhos: R$ {order.delivery_fee?.toFixed(2)}</p>
+                <p className="mt-0.5 text-[10px] text-black/30">Valor Total: R$ {order.total_price.toFixed(2)}</p>
               </div>
               <Button onClick={() => acceptOrder(order.id)}>Aceitar</Button>
             </Card>
@@ -1298,13 +1827,19 @@ function ClientDashboard({ user }: { user: UserData }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [address, setAddress] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
-  const [trackingOrder, setTrackingOrder] = useState<{ id: number, lat: number, lng: number } | null>(null);
+  const [showProfileUpdate, setShowProfileUpdate] = useState(false);
+  const [tempCpf, setTempCpf] = useState(user.cpf || '');
+  const [tempPhone, setTempPhone] = useState(user.phone || '');
+  const [trackingOrder, setTrackingOrder] = useState<Order | null>(null);
+  const [driverLocation, setDriverLocation] = useState<{lat: number, lng: number} | null>(null);
   const [pixData, setPixData] = useState<{ orderId: number, pixText: string, qrCodeBase64: string } | null>(null);
   const [pixStatus, setPixStatus] = useState<'awaiting' | 'paid' | 'error'>('awaiting');
   const [pixCountdown, setPixCountdown] = useState(600); // 10 minutes
   const [pixCopied, setPixCopied] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'dinheiro' | 'cartao'>('pix');
+  const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
+  const [deliveryFee, setDeliveryFee] = useState(0);
 
   useEffect(() => {
     fetchRestaurants();
@@ -1314,15 +1849,21 @@ function ClientDashboard({ user }: { user: UserData }) {
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      // Bug fix: driver sends 'update_location', not 'location_update'
-      if (data.type === 'update_location') {
+      if (data.type === 'update_location' && data.orderId) {
+        // Update driver location if we're tracking this order
         setTrackingOrder(prev => {
           if (prev && prev.id === data.orderId) {
-            return { id: data.orderId, lat: data.lat, lng: data.lng };
+            setDriverLocation({ lat: data.lat, lng: data.lng });
+            return prev;
           }
-          // Auto-start tracking if not already tracking this order
-          if (data.orderId) {
-            return { id: data.orderId, lat: data.lat, lng: data.lng };
+          return prev;
+        });
+        // Also check if we have an out_for_delivery order we should be tracking
+        setOrders(prev => {
+          const match = prev.find(o => o.id === data.orderId && o.status === 'out_for_delivery');
+          if (match) {
+            setTrackingOrder(match);
+            setDriverLocation({ lat: data.lat, lng: data.lng });
           }
           return prev;
         });
@@ -1331,14 +1872,60 @@ function ClientDashboard({ user }: { user: UserData }) {
     return () => ws.close();
   }, []);
 
+  // Update distance when restaurant or location changes
+  useEffect(() => {
+    if (selectedRestaurant && selectedRestaurant.lat && selectedRestaurant.lng) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          const dist = calculateDistance(
+            selectedRestaurant.lat, 
+            selectedRestaurant.lng, 
+            pos.coords.latitude, 
+            pos.coords.longitude
+          );
+          setDeliveryDistance(dist);
+          setDeliveryFee(dist * 1.80);
+        });
+      }
+    } else {
+      setDeliveryDistance(null);
+      setDeliveryFee(0);
+    }
+  }, [selectedRestaurant]);
+
   const fetchRestaurants = async () => {
     const res = await fetch('/api/restaurants');
     setRestaurants(await res.json());
   };
 
+  const handleUpdateProfile = async () => {
+    if (!tempCpf || !tempPhone) {
+      alert('Por favor, preencha CPF e Telefone.');
+      return;
+    }
+    const res = await fetch(`/api/users/${user.id}/info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cpf: tempCpf, phone: tempPhone })
+    });
+    if (res.ok) {
+      const updatedUser = { ...user, cpf: tempCpf, phone: tempPhone };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      alert('Dados atualizados com sucesso!');
+      setShowProfileUpdate(false);
+      window.location.reload(); // Refresh to update user context globally
+    } else {
+      alert('Erro ao atualizar dados.');
+    }
+  };
+
   const fetchOrders = async () => {
     const res = await fetch(`/api/orders/client/${user.id}`);
-    setOrders(await res.json());
+    const data: Order[] = await res.json();
+    setOrders(data);
+    // Auto-track any order currently out for delivery
+    const activeDelivery = data.find(o => o.status === 'out_for_delivery');
+    if (activeDelivery) setTrackingOrder(activeDelivery);
   };
 
   const selectRestaurant = async (r: Restaurant) => {
@@ -1372,6 +1959,12 @@ function ClientDashboard({ user }: { user: UserData }) {
       return;
     }
 
+    if (!user.cpf || !user.phone) {
+      alert('Para gerar o PIX, precisamos do seu CPF e Telefone. Por favor, atualize seus dados.');
+      setShowProfileUpdate(true);
+      return;
+    }
+
     setShowConfirm(true);
   };
 
@@ -1388,7 +1981,10 @@ function ClientDashboard({ user }: { user: UserData }) {
             clientId: user.id,
             restaurantId: selectedRestaurant!.id,
             items: cart.map(i => ({ id: i.item.id, quantity: i.quantity, price: i.item.price })),
-            totalPrice, lat, lng, address
+            totalPrice: totalPrice + deliveryFee,
+            deliveryFee,
+            distance: deliveryDistance,
+            lat, lng, address
           })
         });
         const data = await res.json();
@@ -1431,7 +2027,10 @@ function ClientDashboard({ user }: { user: UserData }) {
             clientId: user.id,
             restaurantId: selectedRestaurant!.id,
             items: cart.map(i => ({ id: i.item.id, quantity: i.quantity, price: i.item.price })),
-            totalPrice, lat, lng, address, method: paymentMethod
+            totalPrice: totalPrice + deliveryFee,
+            deliveryFee,
+            distance: deliveryDistance,
+            lat, lng, address, method: paymentMethod
           })
         });
         const data = await res.json();
@@ -1460,26 +2059,80 @@ function ClientDashboard({ user }: { user: UserData }) {
 
   return (
     <div className="space-y-12 animate-in fade-in duration-700">
+      {showProfileUpdate && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-sm">
+            <Card className="p-8 border-none shadow-2xl bg-white text-black">
+              <div className="mb-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-white shadow-xl">
+                  <User size={28} />
+                </div>
+                <h3 className="text-2xl font-black tracking-tight text-black">Atualizar Dados</h3>
+                <p className="text-black/50 text-sm">Necessário para gerar o PIX</p>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase tracking-widest text-black/40">CPF</label>
+                  <input 
+                    type="text" 
+                    placeholder="000.000.000-00"
+                    value={tempCpf} 
+                    onChange={e => setTempCpf(e.target.value)}
+                    className="w-full rounded-2xl border-none bg-black/5 px-6 py-4 text-sm font-bold focus:ring-2 focus:ring-black text-black"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase tracking-widest text-black/40">Telefone</label>
+                  <input 
+                    type="text" 
+                    placeholder="(00) 00000-0000"
+                    value={tempPhone} 
+                    onChange={e => setTempPhone(e.target.value)}
+                    className="w-full rounded-2xl border-none bg-black/5 px-6 py-4 text-sm font-bold focus:ring-2 focus:ring-black text-black"
+                  />
+                </div>
+                <div className="pt-4 flex flex-col gap-3">
+                  <Button onClick={handleUpdateProfile} className="h-14 font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-200">Salvar e Continuar</Button>
+                  <Button variant="ghost" onClick={() => setShowProfileUpdate(false)} className="h-14 font-bold text-black/40 hover:text-black">Cancelar</Button>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        </div>
+      )}
+
       {/* Tracking Banner */}
       {trackingOrder && (
-        <Card className="border-emerald-500 bg-emerald-50 shadow-lg shadow-emerald-100 p-4">
+        <Card className="border-emerald-500 bg-emerald-50 shadow-lg shadow-emerald-100 p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 animate-pulse items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-200">
                 <Truck size={24} />
               </div>
-              <div>
-                <p className="font-black text-emerald-900 tracking-tight">Seu pedido está chegando!</p>
+                <div>
+                <p className="font-black text-emerald-900 tracking-tight">
+                  {trackingOrder.delivery_type === 'own' ? 'O restaurante está entregando!' : 'Seu pedido está chegando!'}
+                </p>
                 <div className="flex items-center gap-2 text-xs text-emerald-700/60">
                    <MapPin size={12} />
-                   <span>Localização atualizada em tempo real</span>
+                   <span>
+                     {trackingOrder.delivery_type === 'own' 
+                       ? 'Entrega realizada pela equipe própria do restaurante' 
+                       : (driverLocation ? 'Entregador localizado em tempo real' : 'Aguardando localização do entregador...')}
+                   </span>
                 </div>
               </div>
             </div>
-            <Button size="sm" variant="ghost" onClick={() => setTrackingOrder(null)} className="hover:bg-emerald-100 text-emerald-600">
+            <Button size="sm" variant="ghost" onClick={() => { setTrackingOrder(null); setDriverLocation(null); }} className="hover:bg-emerald-100 text-emerald-600">
               <X size={18} />
             </Button>
           </div>
+          {/* Live map */}
+          <DeliveryMap
+            driverLoc={driverLocation}
+            restaurantLoc={trackingOrder.restaurantLat ? { lat: trackingOrder.restaurantLat, lng: trackingOrder.restaurantLng } : null}
+            clientLoc={trackingOrder.client_lat ? { lat: trackingOrder.client_lat, lng: trackingOrder.client_lng } : null}
+          />
         </Card>
       )}
 
@@ -1770,9 +2423,20 @@ function ClientDashboard({ user }: { user: UserData }) {
                         </div>
                       </div>
 
-                      <div className="flex items-end justify-between">
+                      <div className="space-y-2 border-t border-white/10 pt-6">
+                        <div className="flex justify-between text-xs font-bold text-white/40 uppercase tracking-widest">
+                          <span>Subtotal</span>
+                          <span>R$ {totalPrice.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs font-bold text-emerald-500/80 uppercase tracking-widest">
+                          <span>Taxa de Manutenção ({deliveryDistance?.toFixed(1)} km)</span>
+                          <span>R$ {deliveryFee.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-end justify-between border-t border-white/10 pt-4">
                         <p className="text-xs font-bold text-white/40 uppercase tracking-widest">Total Geral</p>
-                        <p className="text-4xl font-black text-emerald-500 tracking-tighter">R$ {cart.reduce((s, i) => s + i.item.price * i.quantity, 0).toFixed(2)}</p>
+                        <p className="text-4xl font-black text-emerald-500 tracking-tighter">R$ {(totalPrice + deliveryFee).toFixed(2)}</p>
                       </div>
 
                       <Button 
