@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import fs from 'fs';
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -42,7 +43,7 @@ async function startServer() {
 
     if (process.env.NODE_ENV === 'production') {
       const distPath = path.join(__dirname, 'dist');
-      if (!require('fs').existsSync(distPath)) {
+      if (!fs.existsSync(distPath)) {
         console.error('CRITICAL ERROR: dist/ folder not found! Build might have failed.');
       } else {
         console.log('Production: dist/ folder found.');
