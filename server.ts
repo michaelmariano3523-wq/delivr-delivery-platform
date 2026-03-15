@@ -40,6 +40,15 @@ async function startServer() {
     const server = createServer(app);
     const wss = new WebSocketServer({ server });
 
+    if (process.env.NODE_ENV === 'production') {
+      const distPath = path.join(__dirname, 'dist');
+      if (!require('fs').existsSync(distPath)) {
+        console.error('CRITICAL ERROR: dist/ folder not found! Build might have failed.');
+      } else {
+        console.log('Production: dist/ folder found.');
+      }
+    }
+
     app.use(express.json({ limit: '50mb' }));
     app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
