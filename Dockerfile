@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build
 
 # Expose port
-EXPOSE 3000
+# Port is provided by Railway at runtime
 
 # Set production environment
 ENV NODE_ENV=production
