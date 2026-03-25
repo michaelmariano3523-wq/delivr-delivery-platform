@@ -192,6 +192,9 @@ interface Restaurant {
   name: string;
   address: string;
   category: string;
+  lat?: number;
+  lng?: number;
+  delivery_type?: string;
 }
 
 interface MenuItem {
@@ -210,6 +213,7 @@ interface Order {
   driverId: number | null;
   status: 'pending' | 'preparing' | 'out_for_delivery' | 'delivered';
   total_price: number;
+  delivery_fee?: number;
   client_lat: number;
   client_lng: number;
   address?: string;
@@ -217,22 +221,26 @@ interface Order {
   restaurantName?: string;
   clientName?: string;
   restaurantAddress?: string;
+  restaurantLat?: number;
+  restaurantLng?: number;
+  delivery_type?: string;
 }
 
 // --- Components ---
 
-const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'ghost' | 'default', size?: 'default' | 'icon' | 'sm' }>(({ className, variant = 'default', size = 'default', ...props }, ref) => (
+const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'ghost' | 'default' | 'outline', size?: 'default' | 'icon' | 'sm' }>(({ className, variant = 'default', size = 'default', ...props }, ref) => (
   <button
     ref={ref}
     className={cn(
       "inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
-      variant === 'default' ? "bg-black text-white hover:bg-black/90" : "bg-transparent text-black hover:bg-black/5",
+      variant === 'default' ? "bg-black text-white hover:bg-black/90" : variant === 'outline' ? "border border-black/10 bg-transparent text-black hover:bg-black/5" : "bg-transparent text-black hover:bg-black/5",
       size === 'icon' ? "h-10 w-10 p-0" : size === 'sm' ? "h-8 px-3 text-xs" : "h-10 px-4",
       className
     )}
     {...props}
   />
 ));
+Button.displayName = 'Button';
 
 const Card = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn("rounded-2xl border border-black/5 bg-white p-6 shadow-sm", className)} {...props}>
@@ -1127,7 +1135,7 @@ function AdminRegisterForm({ onRegisterSuccess }: { onRegisterSuccess: () => voi
 function RestaurantDashboard({ user }: { user: UserData }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'finance'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'finance' | 'settings'>('orders');
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [fetching, setFetching] = useState(true);
